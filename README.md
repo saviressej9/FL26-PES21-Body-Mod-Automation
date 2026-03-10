@@ -1,6 +1,6 @@
 # FL26 Mod Automation
 
-A desktop tool for automating body model mod assignments in FC 26 (FIFA 26) using the [PRDX Body Model Add-On V2.5](https://www.pesmaster.com) via Sider.
+A desktop tool for automating body model mod assignments in FFL26 using the [PRDX Body Model Add-On V2.5](https://www.pesmaster.com) via Sider.
 
 ---
 
