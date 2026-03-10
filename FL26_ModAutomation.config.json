@@ -1,0 +1,110 @@
+{
+  "seed": 26,
+  "masterPlayerCsv": "PlayerIds.csv",
+  "modRootPath": "C:/FL26/SiderAddons/livecpk/PRDX_Body Model-Add On V2.5",
+  "mods": {
+    "gripSoxDualColor": {
+      "enabled": true,
+      "folderName": "Grip Sock-Dual Color All Teams",
+      "logPrefix": "GripSox_DualColor",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "gripSoxLong": {
+      "enabled": true,
+      "folderName": "Grip Sock-Long",
+      "logPrefix": "GripSox_Long",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "gripSoxShort": {
+      "enabled": true,
+      "folderName": "Grip Sock-Short",
+      "logPrefix": "GripSox_Short",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "gripSoxBrands": {
+      "enabled": true,
+      "folderName": "Grip Sock-Brands",
+      "logPrefix": "GripSox_Brands",
+      "percent": 0,
+      "mode": "Balanced",
+      "manualPlayerIds": [],
+      "brands": [
+        "Adidas",
+        "Falke",
+        "Gravity",
+        "Metasox",
+        "Nike",
+        "SoxPro",
+        "Storelli",
+        "Tapedesign",
+        "TruSox"
+      ]
+    },
+    "sockHoles": {
+      "enabled": true,
+      "folderName": "Sock-Holes",
+      "logPrefix": "Socks_Holes",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "sockMiddleHigh": {
+      "enabled": true,
+      "folderName": "Sock-Middle High",
+      "logPrefix": "Socks_MiddleHigh",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "sockShortGroup": {
+      "enabled": true,
+      "folderName": "Sock-Short",
+      "logPrefix": "Socks_ShortGroup",
+      "percent": 0,
+      "manualPlayerIds": [
+        "140332"
+      ]
+    },
+    "pantsBaggy": {
+      "enabled": true,
+      "folderName": "Pants-Baggy",
+      "logPrefix": "Pants_Baggy",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "pantsExtraBaggy": {
+      "enabled": true,
+      "folderName": "Pants-Extra Baggy",
+      "logPrefix": "Pants_ExtraBaggy",
+      "percent": 0,
+      "manualPlayerIds": []
+    },
+    "pantsShorter": {
+      "enabled": true,
+      "folderName": "Pants-Shorter",
+      "logPrefix": "Pants_Shorter",
+      "percent": 0,
+      "manualPlayerIds": [
+        "140332"
+      ]
+    },
+    "glovesBrands": {
+      "enabled": true,
+      "folderName": "Gloves-Brands",
+      "logPrefix": "Gloves_Brands",
+      "percent": 0,
+      "mode": "Balanced",
+      "manualPlayerIds": [],
+      "excludeBrands": [
+        "Real Madrid",
+        "Bayern Munich"
+      ]
+    },
+    "handtape": {
+      "enabled": true,
+      "folderName": "xTexture_Hand Tape",
+      "logPrefix": "Handtape"
+    }
+  }
+}
