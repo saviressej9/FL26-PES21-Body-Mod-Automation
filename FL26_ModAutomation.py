@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import json
 import os
+import sys
 import subprocess
 import threading
 import csv
@@ -13,7 +14,13 @@ import shutil
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-PACKAGE_DIR  = os.path.dirname(os.path.abspath(__file__))
+# When frozen by PyInstaller, __file__ points to the temp _MEIPASS extraction
+# folder which is deleted on exit. Use sys.executable to get the real exe dir.
+if getattr(sys, 'frozen', False):
+    PACKAGE_DIR = os.path.dirname(sys.executable)
+else:
+    PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 CONFIG_PATH  = os.path.join(PACKAGE_DIR, "FL26_ModAutomation.config.json")
 PLAYERID_CSV = os.path.join(PACKAGE_DIR, "PlayerIds.csv")
 
