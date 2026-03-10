@@ -20,10 +20,6 @@ PLAYERID_CSV = os.path.join(PACKAGE_DIR, "PlayerIds.csv")
 # ── mod definitions ───────────────────────────────────────────────────────────
 
 MOD_LABELS = {
-    "gripSoxDualColor" : "Grip Sock - Dual Color All Teams",
-    "gripSoxExtraLong" : "Grip Sock - Extra Long",
-    "gripSoxLong"      : "Grip Sock - Long",
-    "gripSoxShort"     : "Grip Sock - Short",
     "gripSoxBrands"    : "Grip Sock - Brands",
     "sockHoles"        : "Sock - Holes",
     "sockMiddleHigh"   : "Sock - Middle High",
@@ -36,10 +32,6 @@ MOD_LABELS = {
 }
 
 MOD_FOLDERS = {
-    "gripSoxDualColor" : "Grip Sock-Dual Color All Teams",
-    "gripSoxExtraLong" : "Grip Sock-Extra Long",
-    "gripSoxLong"      : "Grip Sock-Long",
-    "gripSoxShort"     : "Grip Sock-Short",
     "gripSoxBrands"    : "Grip Sock-Brands",
     "sockHoles"        : "Sock-Holes",
     "sockMiddleHigh"   : "Sock-Middle High",
@@ -60,6 +52,12 @@ PER_VARIATION_KEYS = {
 
 # Grouped sections: each variation is its own top-level folder detected by prefix
 GROUPED_SECTIONS = {
+    "gripSoxLength" : {
+        "label"          : "Grip Sock - Length",
+        "folder_prefix"  : "Grip Sock-",
+        "logPrefix"      : "GripSoxLength",
+        "exclude_folders": ["Grip Sock-Brands"],
+    },
     "sleeveRollUp" : {
         "label"         : "Sleeve - Roll Up",
         "folder_prefix" : "Sleeve Roll Up-",
@@ -153,6 +151,19 @@ def write_player_ids_csv(ids):
 
 def detect_variations(mod_root, folder_name):
     """For brand/template style mods — subfolders inside one root folder."""
+    # sockShortGroup spans multiple top-level folders — detect by prefix
+    if folder_name == "Sock-Short":
+        prefixes = ("Sock-Short", "Sock-Extreme Short", "Sock-Shinpads")
+        results = []
+        if not os.path.isdir(mod_root):
+            return []
+        for d in sorted(os.listdir(mod_root)):
+            if any(d.startswith(p) for p in prefixes):
+                full = os.path.join(mod_root, d)
+                if os.path.isdir(full) and os.path.isdir(os.path.join(full, REL_REAL)):
+                    results.append(d)
+        return results
+
     base = os.path.join(mod_root, folder_name)
     if not os.path.isdir(base):
         return []
@@ -173,13 +184,14 @@ def detect_variations(mod_root, folder_name):
                 templates.append(d)
         return templates if len(templates) > 1 else []
 
-def detect_grouped_variations(mod_root, folder_prefix):
+def detect_grouped_variations(mod_root, folder_prefix, exclude_folders=None):
     """For grouped sections — each variation is its own top-level folder."""
     if not os.path.isdir(mod_root):
         return []
+    exclude = set(exclude_folders or [])
     results = []
     for d in sorted(os.listdir(mod_root)):
-        if d.startswith(folder_prefix):
+        if d.startswith(folder_prefix) and d not in exclude:
             full = os.path.join(mod_root, d)
             if os.path.isdir(full):
                 label = d[len(folder_prefix):]
@@ -199,6 +211,7 @@ class App(ctk.CTk):
         self.mod_widgets     = {}
         self.player_ids      = []
         self._db_path        = ""
+        self.appearance_csv_path = ""
         self.id_to_name      = {}
         self.variation_widgets   = {}
         self.detected_variations = {}
@@ -226,6 +239,13 @@ class App(ctk.CTk):
         self.lbl_db_count = ctk.CTkLabel(db_bar, text="", font=ctk.CTkFont(size=12), text_color="lightgreen")
         self.lbl_db_count.pack(side="right", padx=(0,5))
         ctk.CTkButton(db_bar, text="Browse", width=100, command=self._choose_db_file).pack(side="right", padx=10)
+
+        app_bar = ctk.CTkFrame(self, height=50)
+        app_bar.pack(fill="x", padx=10, pady=(5,0))
+        ctk.CTkLabel(app_bar, text="PESEditor Appearances CSV:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(10,5))
+        self.lbl_appearance = ctk.CTkLabel(app_bar, text="Not selected", text_color="gray", font=ctk.CTkFont(size=12))
+        self.lbl_appearance.pack(side="left", padx=5, fill="x", expand=True)
+        ctk.CTkButton(app_bar, text="Browse", width=100, command=self._choose_appearance_csv).pack(side="right", padx=10)
 
         main = ctk.CTkFrame(self)
         main.pack(fill="both", expand=True, padx=10, pady=10)
@@ -458,7 +478,8 @@ class App(ctk.CTk):
             mod_root = self.cfg.get("modRootPath", "")
             if mod_root:
                 prefix     = GROUPED_SECTIONS[key]["folder_prefix"]
-                variations = detect_grouped_variations(mod_root, prefix)
+                excludes   = GROUPED_SECTIONS[key].get("exclude_folders")
+                variations = detect_grouped_variations(mod_root, prefix, excludes)
                 self.detected_grouped[key] = variations
 
         if not variations:
@@ -772,13 +793,6 @@ class App(ctk.CTk):
             text_color="#FF6B35", font=ctk.CTkFont(size=11), wraplength=480, justify="left"
         ).pack(anchor="w", padx=8, pady=(0,6))
 
-        app_row = ctk.CTkFrame(frame, fg_color="transparent")
-        app_row.pack(fill="x", padx=8, pady=(0,4))
-        ctk.CTkLabel(app_row, text="PESEditor CSV:").pack(side="left")
-        self.lbl_appearance = ctk.CTkLabel(app_row, text="Not selected", text_color="gray", font=ctk.CTkFont(size=11))
-        self.lbl_appearance.pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(app_row, text="Browse", width=80, command=self._choose_appearance_csv).pack(side="right")
-
         pid_row = ctk.CTkFrame(frame, fg_color="transparent")
         pid_row.pack(fill="x", padx=8, pady=(0,4))
         ctk.CTkButton(pid_row, text="+ Add Player", width=120, command=self._ht_add_player).pack(side="left", padx=(0,8))
@@ -803,7 +817,6 @@ class App(ctk.CTk):
                       command=lambda: self._run_handtape(dry_run=False)).pack(side="left")
 
         self.ht_players = []
-        self.appearance_csv_path = ""
 
     def _choose_appearance_csv(self):
         path = filedialog.askopenfilename(title="Select PESEditor Appearance CSV",
@@ -811,6 +824,8 @@ class App(ctk.CTk):
         if path:
             self.appearance_csv_path = path
             self.lbl_appearance.configure(text=os.path.basename(path), text_color="lightgreen")
+            self.cfg["appearanceCsvPath"] = path
+            save_config(self.cfg)
 
     def _ht_add_player(self):
         self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_add_ht(pid, name))
@@ -970,7 +985,7 @@ class App(ctk.CTk):
                 self._rebuild_variation_rows(key)
 
         for key, info in GROUPED_SECTIONS.items():
-            variations = detect_grouped_variations(mod_root, info["folder_prefix"])
+            variations = detect_grouped_variations(mod_root, info["folder_prefix"], info.get("exclude_folders"))
             self.detected_grouped[key] = variations
             if variations:
                 self._log(f"  [{info['label']}] {len(variations)} variation(s): {', '.join(l for l,_ in variations)}")
@@ -1000,6 +1015,8 @@ class App(ctk.CTk):
                 self.lbl_db.configure(text=os.path.basename(path), text_color="lightgreen")
                 self.lbl_db_count.configure(text=f"{fmt} | {len(ids):,} players")
                 self._log(f"DB loaded: {path} ({len(ids):,} IDs)")
+                self.cfg["dbPath"] = path
+                save_config(self.cfg)
             except Exception as e:
                 messagebox.showerror("Error", str(e))
 
@@ -1011,15 +1028,35 @@ class App(ctk.CTk):
             self.lbl_root.configure(text=root, text_color="lightgreen")
             self._detect_all_variations(root)
 
+        # Restore DB file path
+        db_path = self.cfg.get("dbPath", "")
+        if db_path and os.path.isfile(db_path):
+            try:
+                ids, names = parse_db_file_with_names(db_path)
+                self.id_to_name = names
+                if ids:
+                    write_player_ids_csv(ids)
+                    self.player_ids = ids
+                    self._db_path   = db_path
+                    ext = os.path.splitext(db_path)[1].lower()
+                    fmt = "FL26 TXT" if ext == ".txt" else "CSV"
+                    self.lbl_db.configure(text=os.path.basename(db_path), text_color="lightgreen")
+                    self.lbl_db_count.configure(text=f"{fmt} | {len(ids):,} players")
+            except Exception:
+                pass
+
+        # Restore appearance CSV path
+        app_path = self.cfg.get("appearanceCsvPath", "")
+        if app_path and os.path.isfile(app_path):
+            self.appearance_csv_path = app_path
+            self.lbl_appearance.configure(text=os.path.basename(app_path), text_color="lightgreen")
+
         mods = self.cfg.get("mods", {})
         for key, w in self.mod_widgets.items():
             mod = mods.get(key, {})
             if "enabled" in mod: w["enabled_var"].set(mod["enabled"])
             w["pct_var"].set(0)
-            manual = mod.get("manualPlayerIds", [])
-            if manual:
-                w["manual_ids"].extend(manual)
-                w["manual_lbl"].configure(text=f"{len(w['manual_ids'])} player(s)")
+            # manual IDs intentionally not loaded — cleared after each run
             if w["variation_toggle_var"] and mod.get("perVariationMode", False):
                 w["variation_toggle_var"].set(True)
                 self._toggle_variation_mode(key)
@@ -1072,6 +1109,12 @@ class App(ctk.CTk):
                     }
                 grp["variationSettings"] = var_cfg
 
+        # Save DB and appearance paths
+        if self._db_path:
+            self.cfg["dbPath"] = self._db_path
+        if self.appearance_csv_path:
+            self.cfg["appearanceCsvPath"] = self.appearance_csv_path
+
         save_config(self.cfg)
         self._log("Settings saved.")
 
@@ -1103,6 +1146,32 @@ class App(ctk.CTk):
 
     # ── run: standard section ─────────────────────────────────────────────────
 
+    def _clear_all_manual_ids(self):
+        """Clear all manual player lists after a run — UI and config."""
+        for key, w in self.mod_widgets.items():
+            w["manual_ids"].clear()
+            w["manual_lbl"].configure(text="0 players")
+        for key, gw in self.grouped_widgets.items():
+            gw["manual_ids"].clear()
+            gw["manual_lbl"].configure(text="0 players")
+            for vw in gw["variations"].values():
+                vw["manual_ids"].clear()
+                vw["man_lbl"].configure(text="0")
+        for vw_dict in self.variation_widgets.values():
+            for vw in vw_dict.values():
+                vw["manual_ids"].clear()
+                vw["man_lbl"].configure(text="0")
+        self.ht_players.clear()
+        self._refresh_ht_label()
+        # Also clear from saved config so they don't reload on next launch
+        for mod in self.cfg.get("mods", {}).values():
+            mod.pop("manualPlayerIds", None)
+        for grp in self.cfg.get("grouped", {}).values():
+            grp.pop("manualPlayerIds", None)
+            for vs in grp.get("variationSettings", {}).values():
+                vs.pop("manualIds", None)
+        save_config(self.cfg)
+
     def _run_section(self, key, dry_run=False):
         self._save_settings()
         root = self.cfg.get("modRootPath", "")
@@ -1125,6 +1194,7 @@ class App(ctk.CTk):
                 return
         mode       = "DryRun" if dry_run else "Run"
         mode_label = f"{'Dry Run' if dry_run else 'Apply'}: {MOD_LABELS[key]}"
+        is_real    = not dry_run
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: {mode_label}...")
 
@@ -1140,6 +1210,7 @@ class App(ctk.CTk):
                 proc.wait()
                 self.after(0, self._set_all_buttons, "normal")
                 if proc.returncode == 0:
+                    if is_real: self.after(0, self._clear_all_manual_ids)
                     self.after(0, self.lbl_status.configure, {"text": f"Status: {mode_label} done", "text_color": "lightgreen"})
                     self.after(0, messagebox.showinfo, "Done", f"{mode_label} completed successfully.")
                 else:
@@ -1176,6 +1247,7 @@ class App(ctk.CTk):
                 return
         mode       = "DryRun" if dry_run else "Run"
         mode_label = f"{'Dry Run' if dry_run else 'Apply'}: {GROUPED_SECTIONS[key]['label']}"
+        is_real    = not dry_run
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: {mode_label}...")
 
@@ -1191,6 +1263,7 @@ class App(ctk.CTk):
                 proc.wait()
                 self.after(0, self._set_all_buttons, "normal")
                 if proc.returncode == 0:
+                    if is_real: self.after(0, self._clear_all_manual_ids)
                     self.after(0, self.lbl_status.configure, {"text": f"Status: {mode_label} done", "text_color": "lightgreen"})
                     self.after(0, messagebox.showinfo, "Done", f"{mode_label} completed successfully.")
                 else:
@@ -1237,6 +1310,7 @@ class App(ctk.CTk):
         if not os.path.exists(PLAYERID_CSV):
             messagebox.showwarning("Missing DB", "Please select a Player DB file first.")
             return
+        is_real = (mode == "Run")
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: Running {mode}...")
 
@@ -1252,6 +1326,7 @@ class App(ctk.CTk):
                 proc.wait()
                 self.after(0, self._set_all_buttons, "normal")
                 if proc.returncode == 0:
+                    if is_real: self.after(0, self._clear_all_manual_ids)
                     self.after(0, self.lbl_status.configure, {"text": "Status: Completed successfully", "text_color": "lightgreen"})
                     self.after(0, messagebox.showinfo, "Done", f"{mode} completed successfully.")
                 else:

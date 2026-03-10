@@ -28,11 +28,11 @@ function Invoke-Mod([string]$script, [hashtable]$scriptArgs) {
 }
 
 function Get-ManualIds($mod) {
-  if ($mod -and $mod.PSObject.Properties.Name -contains 'manualPlayerIds' `
-      -and $mod.manualPlayerIds -and $mod.manualPlayerIds.Count -gt 0) {
-    return @($mod.manualPlayerIds)
+  if ($mod -and $mod.PSObject.Properties.Name -contains 'manualPlayerIds' -and $mod.manualPlayerIds) {
+    [string[]]$ids = @($mod.manualPlayerIds | ForEach-Object { "$_" } | Where-Object { $_ -match '^\d+$' })
+    return $ids
   }
-  return @()
+  return [string[]]@()
 }
 
 $cfg     = Read-Json $ConfigPath
@@ -84,38 +84,6 @@ $allPantsRealPaths = @($pantsRoots | ForEach-Object { Join-Path $_ $relReal })
 $allSockRealPipe  = $allSockRealPaths  -join "|"
 $allPantsRealPipe = $allPantsRealPaths -join "|"
 
-# ═════════════════════════════════════════════════════════════════════════════
-# GRIP SOX SINGLES
-# ═════════════════════════════════════════════════════════════════════════════
-
-$gripSoxSingleKeys = @("gripSoxDualColor","gripSoxExtraLong","gripSoxLong","gripSoxShort")
-
-if (-not $solo -or $solo -in $gripSoxSingleKeys) {
-  foreach ($modKey in $gripSoxSingleKeys) {
-    if ($solo -and $solo -ne $modKey) { continue }
-    $mod = $mods.$modKey
-    if (-not $mod -or -not $mod.enabled) { continue }
-    $modFolder = Join-Path $modRoot $mod.folderName
-    if (-not (Test-Path -LiteralPath $modFolder -PathType Container)) {
-      Write-Host ("[WARN] Skipping {0} - folder not found." -f $mod.folderName) -ForegroundColor DarkYellow
-      continue
-    }
-    $otherRoots = @($gripSoxRoots | Where-Object { $_ -ne $modFolder })
-    $mArgs = @{
-      CsvPath               = $csvMain
-      RootPath              = $modFolder
-      OtherGripSoxRootsPipe = ($otherRoots -join "|")
-      LogFileName           = ("{0}_Assignments.csv" -f $mod.logPrefix)
-      Percent               = [int]$mod.percent
-      Seed                  = $seed
-    }
-    $manIds = Get-ManualIds $mod
-    if ($manIds.Count -gt 0) { $mArgs["ManualPlayerIds"] = $manIds }
-    if ($dry) { $mArgs["DryRun"] = $true }
-    Invoke-Mod "Assign-GripSox-Single.ps1" $mArgs
-  }
-}
-
 # ── Grip Sox Brands ───────────────────────────────────────────────────────────
 
 if ((-not $solo -or $solo -eq "gripSoxBrands") -and $mods.gripSoxBrands -and $mods.gripSoxBrands.enabled) {
@@ -149,7 +117,7 @@ if ((-not $solo -or $solo -eq "gripSoxBrands") -and $mods.gripSoxBrands -and $mo
         $base["Brands"] = @($m.brands)
       }
       $manIds = Get-ManualIds $m
-      if ($manIds.Count -gt 0) { $base["ManualPlayerIds"] = $manIds }
+      if ($manIds -and @($manIds).Count -gt 0) { $base["ManualPlayerIds"] = @($manIds) }
       if ($dry) { $base["DryRun"] = $true }
       Invoke-Mod "Assign-GripSox-Brands.ps1" $base
     }
@@ -177,19 +145,29 @@ if (-not $solo -or $solo -in $sockKeys) {
     $perVar = $mod.PSObject.Properties.Name -contains 'perVariationMode' -and $mod.perVariationMode
     if ($perVar -and $mod.PSObject.Properties.Name -contains 'variationSettings') {
       foreach ($tmpl in $mod.variationSettings.PSObject.Properties) {
-        $vs = $tmpl.Value; $tplName = $tmpl.Name
+        $vs = $tmpl.Value; $varFolderName = $tmpl.Name
+        # For sockShortGroup, each variation name IS the folder name at mod root
+        if ($modKey -eq "sockShortGroup") {
+          $varFolder = Join-Path $modRoot $varFolderName
+        } else {
+          $varFolder = $modFolder
+        }
+        if (-not (Test-Path -LiteralPath $varFolder -PathType Container)) {
+          Write-Host ("[WARN] Skipping variation {0} - folder not found." -f $varFolderName) -ForegroundColor DarkYellow
+          continue
+        }
         $mArgs = @{
           CsvPath              = $csvMain
-          RootPath             = $modFolder
+          RootPath             = $varFolder
           AllSockRealPathsPipe = $allSockRealPipe
-          ModName              = $mod.folderName
-          LogFileName          = ("{0}_{1}_Assignments.csv" -f $mod.logPrefix, ($tplName -replace '[^a-zA-Z0-9]','_'))
+          ModName              = $varFolderName
+          LogFileName          = ("{0}_{1}_Assignments.csv" -f $mod.logPrefix, ($varFolderName -replace '[^a-zA-Z0-9]','_'))
           Percent              = [int]$vs.percent
-          TemplateFilter       = $tplName
           Seed                 = $seed
         }
-        if ($vs.PSObject.Properties.Name -contains 'manualIds' -and $vs.manualIds -and $vs.manualIds.Count -gt 0) {
-          $mArgs["ManualPlayerIds"] = @($vs.manualIds)
+        if ($vs.PSObject.Properties.Name -contains 'manualIds' -and $vs.manualIds) {
+          [string[]]$varManIds = @($vs.manualIds | ForEach-Object { "$_" } | Where-Object { $_ -match '^\d+$' })
+          if ($varManIds -and @($varManIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = $varManIds }
         }
         if ($dry) { $mArgs["DryRun"] = $true }
         Invoke-Mod "Assign-Socks.ps1" $mArgs
@@ -205,7 +183,7 @@ if (-not $solo -or $solo -in $sockKeys) {
         Seed                 = $seed
       }
       $manIds = Get-ManualIds $mod
-      if ($manIds.Count -gt 0) { $mArgs["ManualPlayerIds"] = $manIds }
+      if ($manIds -and @($manIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = @($manIds) }
       if ($dry) { $mArgs["DryRun"] = $true }
       Invoke-Mod "Assign-Socks.ps1" $mArgs
     }
@@ -238,7 +216,7 @@ if (-not $solo -or $solo -in $pantsKeys) {
       Seed                  = $seed
     }
     $manIds = Get-ManualIds $mod
-    if ($manIds.Count -gt 0) { $mArgs["ManualPlayerIds"] = $manIds }
+    if ($manIds -and @($manIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = @($manIds) }
     if ($dry) { $mArgs["DryRun"] = $true }
     Invoke-Mod "Assign-Pants.ps1" $mArgs
   }
@@ -262,7 +240,7 @@ if ((-not $solo -or $solo -eq "shirtBaggy") -and
       Seed        = $seed
     }
     $manIds = Get-ManualIds $mod
-    if ($manIds.Count -gt 0) { $mArgs["ManualPlayerIds"] = $manIds }
+    if ($manIds -and @($manIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = @($manIds) }
     if ($dry) { $mArgs["DryRun"] = $true }
     Invoke-Mod "Assign-Shirt.ps1" $mArgs
   } else {
@@ -300,12 +278,67 @@ if ((-not $solo -or $solo -eq "glovesBrands") -and $mods.glovesBrands -and $mods
       $base["Mode"]    = [string]$m.mode
       $base["Percent"] = [int]$m.percent
       $manIds = Get-ManualIds $m
-      if ($manIds.Count -gt 0) { $base["ManualPlayerIds"] = $manIds }
+      if ($manIds -and @($manIds).Count -gt 0) { $base["ManualPlayerIds"] = @($manIds) }
       if ($dry) { $base["DryRun"] = $true }
       Invoke-Mod "Assign-Gloves.ps1" $base
     }
   } else {
     Write-Host "[WARN] Skipping Gloves-Brands - folder not found." -ForegroundColor DarkYellow
+  }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GROUPED: Grip Sock Length
+# Each variation is its own top-level folder (Grip Sock-Long, Grip Sock-Short, etc.)
+# Mutually exclusive with each other and with Grip Sock-Brands.
+# ═════════════════════════════════════════════════════════════════════════════
+
+if (-not $solo -or $solo -eq "gripSoxLength") {
+  if ($grouped -and ($grouped.PSObject.Properties.Name -contains 'gripSoxLength')) {
+    $grp = $grouped.gripSoxLength
+    if ($grp.enabled) {
+      $varFolders = @(Get-ChildItem -LiteralPath $modRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name.StartsWith("Grip Sock-") -and $_.Name -ne "Grip Sock-Brands" })
+
+      if ($varFolders.Count -eq 0) {
+        Write-Host "[WARN] No Grip Sock length folders found." -ForegroundColor DarkYellow
+      } else {
+        $perVar = $grp.PSObject.Properties.Name -contains 'perVariationMode' -and $grp.perVariationMode
+
+        foreach ($vf in $varFolders) {
+          $varLabel = $vf.Name.Substring("Grip Sock-".Length)
+          $pct      = [int]$grp.percent
+          $manIds   = Get-ManualIds $grp
+
+          if ($perVar -and $grp.PSObject.Properties.Name -contains 'variationSettings') {
+            $vs = $grp.variationSettings
+            if ($vs.PSObject.Properties.Name -contains $varLabel) {
+              $v      = $vs.$varLabel
+              $pct    = [int]$v.percent
+              $manIds = @()
+              if ($v.PSObject.Properties.Name -contains 'manualIds' -and $v.manualIds) {
+                [string[]]$manIds = @($v.manualIds | ForEach-Object { "$_" } | Where-Object { $_ -match '^\d+$' })
+              }
+            }
+          }
+
+          # Exclude all other grip sox folders (both length and brands)
+          $otherRoots = @($gripSoxRoots | Where-Object { $_ -ne $vf.FullName })
+          $logName    = ("GripSoxLength_{0}_Assignments.csv" -f ($varLabel -replace '[^a-zA-Z0-9]','_'))
+          $mArgs = @{
+            CsvPath               = $csvMain
+            RootPath              = $vf.FullName
+            OtherGripSoxRootsPipe = ($otherRoots -join "|")
+            LogFileName           = $logName
+            Percent               = $pct
+            Seed                  = $seed
+          }
+          if ($manIds -and @($manIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = @($manIds) }
+          if ($dry) { $mArgs["DryRun"] = $true }
+          Invoke-Mod "Assign-GripSox-Single.ps1" $mArgs
+        }
+      }
+    }
   }
 }
 
@@ -363,7 +396,7 @@ foreach ($gd in $groupedDefs) {
       Percent     = $pct
       Seed        = $seed
     }
-    if ($manIds.Count -gt 0) { $mArgs["ManualPlayerIds"] = $manIds }
+    if ($manIds -and @($manIds).Count -gt 0) { $mArgs["ManualPlayerIds"] = @($manIds) }
     if ($dry) { $mArgs["DryRun"] = $true }
 
     Invoke-Mod $gd.Script $mArgs
