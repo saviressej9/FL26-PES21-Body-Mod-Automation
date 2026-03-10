@@ -17,8 +17,11 @@ PACKAGE_DIR  = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH  = os.path.join(PACKAGE_DIR, "FL26_ModAutomation.config.json")
 PLAYERID_CSV = os.path.join(PACKAGE_DIR, "PlayerIds.csv")
 
+# ── mod definitions ───────────────────────────────────────────────────────────
+
 MOD_LABELS = {
     "gripSoxDualColor" : "Grip Sock - Dual Color All Teams",
+    "gripSoxExtraLong" : "Grip Sock - Extra Long",
     "gripSoxLong"      : "Grip Sock - Long",
     "gripSoxShort"     : "Grip Sock - Short",
     "gripSoxBrands"    : "Grip Sock - Brands",
@@ -28,8 +31,53 @@ MOD_LABELS = {
     "pantsBaggy"       : "Pants - Baggy",
     "pantsExtraBaggy"  : "Pants - Extra Baggy",
     "pantsShorter"     : "Pants - Shorter",
+    "shirtBaggy"       : "Shirt - Baggy",
     "glovesBrands"     : "Gloves - Brands",
 }
+
+MOD_FOLDERS = {
+    "gripSoxDualColor" : "Grip Sock-Dual Color All Teams",
+    "gripSoxExtraLong" : "Grip Sock-Extra Long",
+    "gripSoxLong"      : "Grip Sock-Long",
+    "gripSoxShort"     : "Grip Sock-Short",
+    "gripSoxBrands"    : "Grip Sock-Brands",
+    "sockHoles"        : "Sock-Holes",
+    "sockMiddleHigh"   : "Sock-Middle High",
+    "sockShortGroup"   : "Sock-Short",
+    "pantsBaggy"       : "Pants-Baggy",
+    "pantsExtraBaggy"  : "Pants-Extra Baggy",
+    "pantsShorter"     : "Pants-Shorter",
+    "shirtBaggy"       : "Shirt-Baggy",
+    "glovesBrands"     : "Gloves-Brands",
+}
+
+PER_VARIATION_KEYS = {
+    "gripSoxBrands"  : "Grip Sock-Brands",
+    "sockHoles"      : "Sock-Holes",
+    "sockShortGroup" : "Sock-Short",
+    "glovesBrands"   : "Gloves-Brands",
+}
+
+# Grouped sections: each variation is its own top-level folder detected by prefix
+GROUPED_SECTIONS = {
+    "sleeveRollUp" : {
+        "label"         : "Sleeve - Roll Up",
+        "folder_prefix" : "Sleeve Roll Up-",
+        "logPrefix"     : "SleeveRollUp",
+    },
+    "sleeveInner"  : {
+        "label"         : "Sleeve - Inner",
+        "folder_prefix" : "Sleeve Inner-",
+        "logPrefix"     : "SleeveInner",
+    },
+    "wristtaping"  : {
+        "label"         : "Wristtaping",
+        "folder_prefix" : "Wristtaping ",
+        "logPrefix"     : "Wristtaping",
+    },
+}
+
+REL_REAL = os.path.join("Asset", "model", "character", "face", "real")
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -45,45 +93,7 @@ def save_config(cfg):
 
 # ── DB file parser ────────────────────────────────────────────────────────────
 
-def parse_db_file(path):
-    ext = os.path.splitext(path)[1].lower()
-    ids = []
-    if ext == ".txt":
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                m = re.match(r'^\s*(\d+)\s*[-–]', line)
-                if m:
-                    ids.append(m.group(1))
-                else:
-                    m2 = re.match(r'^\s*(\d+)\s*$', line.strip())
-                    if m2:
-                        ids.append(m2.group(1))
-    elif ext == ".csv":
-        for delim in [';', ',']:
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    reader = csv.DictReader(f, delimiter=delim)
-                    rows = list(reader)
-                    if not rows:
-                        continue
-                    col = None
-                    for c in ['Id','ID','PlayerId','PlayerID']:
-                        if c in rows[0]:
-                            col = c
-                            break
-                    if col:
-                        ids = [r[col].strip() for r in rows if r[col].strip().isdigit()]
-                        break
-            except Exception:
-                continue
-    seen = set(); out = []
-    for i in ids:
-        if i not in seen:
-            seen.add(i); out.append(i)
-    return out
-
 def parse_db_file_with_names(path):
-    """Returns (ids_list, id_to_name_dict)"""
     ext = os.path.splitext(path)[1].lower()
     id_to_name = {}
     ids = []
@@ -139,20 +149,61 @@ def write_player_ids_csv(ids):
         for i in ids:
             f.write(i + "\n")
 
+# ── variation detectors ───────────────────────────────────────────────────────
+
+def detect_variations(mod_root, folder_name):
+    """For brand/template style mods — subfolders inside one root folder."""
+    base = os.path.join(mod_root, folder_name)
+    if not os.path.isdir(base):
+        return []
+    real_check = os.path.join(base, REL_REAL)
+    if not os.path.isdir(real_check):
+        variations = []
+        for d in sorted(os.listdir(base)):
+            full = os.path.join(base, d)
+            if os.path.isdir(full) and not d.startswith('.'):
+                if os.path.isdir(os.path.join(full, REL_REAL)):
+                    variations.append(d)
+        return variations
+    else:
+        templates = []
+        for d in sorted(os.listdir(real_check)):
+            full = os.path.join(real_check, d)
+            if os.path.isdir(full) and d.startswith("ID Players"):
+                templates.append(d)
+        return templates if len(templates) > 1 else []
+
+def detect_grouped_variations(mod_root, folder_prefix):
+    """For grouped sections — each variation is its own top-level folder."""
+    if not os.path.isdir(mod_root):
+        return []
+    results = []
+    for d in sorted(os.listdir(mod_root)):
+        if d.startswith(folder_prefix):
+            full = os.path.join(mod_root, d)
+            if os.path.isdir(full):
+                label = d[len(folder_prefix):]
+                results.append((label, d))
+    return results
+
 # ── main app ──────────────────────────────────────────────────────────────────
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("FL26 Mod Automation")
-        self.geometry("1100x820")
+        self.geometry("1100x900")
         self.minsize(900, 700)
 
-        self.cfg = load_config()
-        self.mod_widgets = {}   # key -> { enabled, mode_var, pct_var, manual_ids, btn_sec_dry, btn_sec_apply }
-        self.player_ids  = []
-        self._db_path    = ""
-        self.id_to_name = {}   # id -> player name from DB
+        self.cfg             = load_config()
+        self.mod_widgets     = {}
+        self.player_ids      = []
+        self._db_path        = ""
+        self.id_to_name      = {}
+        self.variation_widgets   = {}
+        self.detected_variations = {}
+        self.grouped_widgets     = {}
+        self.detected_grouped    = {}
 
         self._build_ui()
         self._load_ui_from_config()
@@ -160,19 +211,15 @@ class App(ctk.CTk):
     # ── UI builder ────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Top bar
         top = ctk.CTkFrame(self, height=50)
         top.pack(fill="x", padx=10, pady=(10,0))
-
         ctk.CTkLabel(top, text="Mod Root Folder:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(10,5))
         self.lbl_root = ctk.CTkLabel(top, text="Not selected", text_color="gray", font=ctk.CTkFont(size=12))
         self.lbl_root.pack(side="left", padx=5, fill="x", expand=True)
         ctk.CTkButton(top, text="Browse", width=100, command=self._choose_mod_root).pack(side="right", padx=10)
 
-        # DB file bar
         db_bar = ctk.CTkFrame(self, height=50)
         db_bar.pack(fill="x", padx=10, pady=(5,0))
-
         ctk.CTkLabel(db_bar, text="Player DB File:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(10,5))
         self.lbl_db = ctk.CTkLabel(db_bar, text="Not selected", text_color="gray", font=ctk.CTkFont(size=12))
         self.lbl_db.pack(side="left", padx=5, fill="x", expand=True)
@@ -180,159 +227,565 @@ class App(ctk.CTk):
         self.lbl_db_count.pack(side="right", padx=(0,5))
         ctk.CTkButton(db_bar, text="Browse", width=100, command=self._choose_db_file).pack(side="right", padx=10)
 
-        # Main area: scrollable mod list + log
         main = ctk.CTkFrame(self)
         main.pack(fill="both", expand=True, padx=10, pady=10)
         main.columnconfigure(0, weight=1)
         main.columnconfigure(1, weight=1)
         main.rowconfigure(0, weight=1)
 
-        # Left: mod list
-        left_scroll = ctk.CTkScrollableFrame(main, label_text="Mod Settings", width=520)
-        left_scroll.grid(row=0, column=0, sticky="nsew", padx=(0,5))
+        self._left_scroll = ctk.CTkScrollableFrame(main, label_text="Mod Settings", width=520)
+        self._left_scroll.grid(row=0, column=0, sticky="nsew", padx=(0,5))
 
         for key, label in MOD_LABELS.items():
-            self._build_mod_row(left_scroll, key, label)
+            self._build_mod_row(self._left_scroll, key, label)
 
-        # Handtape section (separate)
-        self._build_handtape_section(left_scroll)
+        for key, info in GROUPED_SECTIONS.items():
+            self._build_grouped_section(self._left_scroll, key, info)
 
-        # Right: log
+        self._build_handtape_section(self._left_scroll)
+
         right = ctk.CTkFrame(main)
         right.grid(row=0, column=1, sticky="nsew", padx=(5,0))
         right.rowconfigure(1, weight=1)
         right.columnconfigure(0, weight=1)
-
         ctk.CTkLabel(right, text="Log Output", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, pady=(5,0))
         self.txt_log = ctk.CTkTextbox(right, font=ctk.CTkFont(family="Consolas", size=11))
         self.txt_log.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-        # Bottom buttons (global run all)
         btn_bar = ctk.CTkFrame(self, height=60)
         btn_bar.pack(fill="x", padx=10, pady=(0,10))
-
         self.lbl_status = ctk.CTkLabel(btn_bar, text="Status: idle", font=ctk.CTkFont(size=12))
         self.lbl_status.pack(side="left", padx=15)
-
         ctk.CTkButton(btn_bar, text="Clear Log",      width=110, fg_color="gray40",  command=self._clear_log).pack(side="right", padx=5)
-        self.btn_run  = ctk.CTkButton(btn_bar, text="RUN ALL",    width=130, fg_color="#1a7a1a", command=self._run_real)
+        self.btn_run = ctk.CTkButton(btn_bar, text="RUN ALL",    width=130, fg_color="#1a7a1a", command=self._run_real)
         self.btn_run.pack(side="right", padx=5)
-        self.btn_dry  = ctk.CTkButton(btn_bar, text="DRY RUN ALL", width=140, fg_color="#1a4a7a", command=self._run_dry)
+        self.btn_dry = ctk.CTkButton(btn_bar, text="DRY RUN ALL", width=140, fg_color="#1a4a7a", command=self._run_dry)
         self.btn_dry.pack(side="right", padx=5)
         ctk.CTkButton(btn_bar, text="Save Settings",  width=130, command=self._save_settings).pack(side="right", padx=5)
+
+    # ── standard mod row ──────────────────────────────────────────────────────
 
     def _build_mod_row(self, parent, key, label):
         frame = ctk.CTkFrame(parent)
         frame.pack(fill="x", padx=5, pady=4)
 
-        # Row 1: enable toggle + label
         row1 = ctk.CTkFrame(frame, fg_color="transparent")
         row1.pack(fill="x", padx=8, pady=(6,2))
-
         enabled_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(row1, text=label, variable=enabled_var,
                         font=ctk.CTkFont(size=13, weight="bold")).pack(side="left")
 
-        # Row 2: mode selector + percent or manual
+        variation_toggle_var = None
+        variation_body_frame = None
+
+        if key in PER_VARIATION_KEYS:
+            variation_toggle_var = ctk.BooleanVar(value=False)
+            toggle_row = ctk.CTkFrame(frame, fg_color="transparent")
+            toggle_row.pack(fill="x", padx=8, pady=(0,2))
+            ctk.CTkLabel(toggle_row, text="Assignment mode:",
+                         font=ctk.CTkFont(size=11), text_color="gray").pack(side="left", padx=(0,8))
+            ctk.CTkRadioButton(toggle_row, text="Random Across All",
+                               variable=variation_toggle_var, value=False,
+                               command=lambda k=key: self._toggle_variation_mode(k),
+                               font=ctk.CTkFont(size=11)).pack(side="left", padx=(0,10))
+            ctk.CTkRadioButton(toggle_row, text="Per Variation",
+                               variable=variation_toggle_var, value=True,
+                               command=lambda k=key: self._toggle_variation_mode(k),
+                               font=ctk.CTkFont(size=11)).pack(side="left")
+            variation_body_frame = ctk.CTkFrame(frame, fg_color="transparent")
+
         row2 = ctk.CTkFrame(frame, fg_color="transparent")
         row2.pack(fill="x", padx=8, pady=(0,4))
-
         mode_var = ctk.StringVar(value="percent")
         ctk.CTkRadioButton(row2, text="Percentage", variable=mode_var, value="percent",
                            command=lambda k=key: self._toggle_mode(k)).pack(side="left", padx=(0,10))
         ctk.CTkRadioButton(row2, text="Manual", variable=mode_var, value="manual",
                            command=lambda k=key: self._toggle_mode(k)).pack(side="left", padx=(0,15))
-
-        # Percent controls
         pct_frame = ctk.CTkFrame(row2, fg_color="transparent")
         pct_frame.pack(side="left")
         ctk.CTkLabel(pct_frame, text="% :").pack(side="left")
         pct_var = ctk.IntVar(value=0)
-        pct_entry = ctk.CTkEntry(pct_frame, textvariable=pct_var, width=55)
-        pct_entry.pack(side="left", padx=4)
-
-        # Manual controls
+        ctk.CTkEntry(pct_frame, textvariable=pct_var, width=55).pack(side="left", padx=4)
         manual_frame = ctk.CTkFrame(row2, fg_color="transparent")
-        manual_ids = []
-
-        def add_manual(k=key):
-            self._add_manual_player(k)
-
-        ctk.CTkButton(manual_frame, text="+ Add Player", width=110, command=add_manual).pack(side="left", padx=(0,5))
-
-        def del_manual(k=key):
-            self._delete_player_dialog(
-                player_list=self.mod_widgets[k]["manual_ids"],
-                on_done=lambda: self.mod_widgets[k]["manual_lbl"].configure(
-                    text=f"{len(self.mod_widgets[k]['manual_ids'])} player(s)"
-                ),
-                title=f"Remove Player from {MOD_LABELS[k]}"
-            )
-
+        manual_ids   = []
+        ctk.CTkButton(manual_frame, text="+ Add Player", width=110,
+                      command=lambda k=key: self._add_manual_player(k)).pack(side="left", padx=(0,5))
         ctk.CTkButton(manual_frame, text="- Remove", width=90, fg_color="#7a1a1a",
-                      command=del_manual).pack(side="left", padx=(0,5))
+                      command=lambda k=key: self._delete_player_dialog(
+                          player_list=self.mod_widgets[k]["manual_ids"],
+                          on_done=lambda: self.mod_widgets[k]["manual_lbl"].configure(
+                              text=f"{len(self.mod_widgets[k]['manual_ids'])} player(s)"),
+                          title=f"Remove Player from {MOD_LABELS[k]}"
+                      )).pack(side="left", padx=(0,5))
         manual_lbl = ctk.CTkLabel(manual_frame, text="0 players", font=ctk.CTkFont(size=11), text_color="gray")
         manual_lbl.pack(side="left")
+        manual_frame.pack_forget()
 
-        manual_frame.pack_forget()  # hidden by default
-
-        # Row 3: per-section Dry Run / Apply buttons
         row3 = ctk.CTkFrame(frame, fg_color="transparent")
         row3.pack(fill="x", padx=8, pady=(2,6))
-
         btn_sec_dry = ctk.CTkButton(row3, text="Dry Run", width=90, height=26,
                                     fg_color="#1a4a7a", font=ctk.CTkFont(size=11),
                                     command=lambda k=key: self._run_section(k, dry_run=True))
         btn_sec_dry.pack(side="left", padx=(0,5))
-
         btn_sec_apply = ctk.CTkButton(row3, text="Apply", width=90, height=26,
                                       fg_color="#1a7a1a", font=ctk.CTkFont(size=11),
                                       command=lambda k=key: self._run_section(k, dry_run=False))
         btn_sec_apply.pack(side="left")
 
         self.mod_widgets[key] = {
-            "enabled_var"   : enabled_var,
-            "mode_var"      : mode_var,
-            "pct_var"       : pct_var,
-            "pct_frame"     : pct_frame,
-            "manual_frame"  : manual_frame,
-            "manual_ids"    : manual_ids,
-            "manual_lbl"    : manual_lbl,
-            "btn_sec_dry"   : btn_sec_dry,
-            "btn_sec_apply" : btn_sec_apply,
+            "enabled_var"          : enabled_var,
+            "mode_var"             : mode_var,
+            "pct_var"              : pct_var,
+            "pct_frame"            : pct_frame,
+            "manual_frame"         : manual_frame,
+            "manual_ids"           : manual_ids,
+            "manual_lbl"           : manual_lbl,
+            "btn_sec_dry"          : btn_sec_dry,
+            "btn_sec_apply"        : btn_sec_apply,
+            "variation_toggle_var" : variation_toggle_var,
+            "variation_body_frame" : variation_body_frame,
+            "standard_row2"        : row2,
+            "standard_row3"        : row3,
         }
+        self.variation_widgets[key] = {}
+
+    # ── grouped section ───────────────────────────────────────────────────────
+
+    def _build_grouped_section(self, parent, key, info):
+        frame = ctk.CTkFrame(parent, border_width=1, border_color="#3a5a3a")
+        frame.pack(fill="x", padx=5, pady=4)
+
+        row1 = ctk.CTkFrame(frame, fg_color="transparent")
+        row1.pack(fill="x", padx=8, pady=(6,2))
+        enabled_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(row1, text=info["label"], variable=enabled_var,
+                        font=ctk.CTkFont(size=13, weight="bold")).pack(side="left")
+
+        toggle_var = ctk.BooleanVar(value=False)
+        toggle_row = ctk.CTkFrame(frame, fg_color="transparent")
+        toggle_row.pack(fill="x", padx=8, pady=(0,2))
+        ctk.CTkLabel(toggle_row, text="Assignment mode:",
+                     font=ctk.CTkFont(size=11), text_color="gray").pack(side="left", padx=(0,8))
+        ctk.CTkRadioButton(toggle_row, text="Random Across All",
+                           variable=toggle_var, value=False,
+                           command=lambda k=key: self._toggle_grouped_mode(k),
+                           font=ctk.CTkFont(size=11)).pack(side="left", padx=(0,10))
+        ctk.CTkRadioButton(toggle_row, text="Per Variation",
+                           variable=toggle_var, value=True,
+                           command=lambda k=key: self._toggle_grouped_mode(k),
+                           font=ctk.CTkFont(size=11)).pack(side="left")
+
+        std_row = ctk.CTkFrame(frame, fg_color="transparent")
+        std_row.pack(fill="x", padx=8, pady=(0,4))
+        mode_var = ctk.StringVar(value="percent")
+        ctk.CTkRadioButton(std_row, text="Percentage", variable=mode_var, value="percent",
+                           command=lambda k=key: self._toggle_grouped_std_mode(k)).pack(side="left", padx=(0,10))
+        ctk.CTkRadioButton(std_row, text="Manual", variable=mode_var, value="manual",
+                           command=lambda k=key: self._toggle_grouped_std_mode(k)).pack(side="left", padx=(0,15))
+        pct_frame = ctk.CTkFrame(std_row, fg_color="transparent")
+        pct_frame.pack(side="left")
+        ctk.CTkLabel(pct_frame, text="% :").pack(side="left")
+        pct_var = ctk.IntVar(value=0)
+        ctk.CTkEntry(pct_frame, textvariable=pct_var, width=55).pack(side="left", padx=4)
+        manual_frame = ctk.CTkFrame(std_row, fg_color="transparent")
+        manual_ids   = []
+        ctk.CTkButton(manual_frame, text="+ Add Player", width=110,
+                      command=lambda k=key: self._add_grouped_manual_player(k)).pack(side="left", padx=(0,5))
+        ctk.CTkButton(manual_frame, text="- Remove", width=90, fg_color="#7a1a1a",
+                      command=lambda k=key: self._remove_grouped_manual_player(k)).pack(side="left", padx=(0,5))
+        manual_lbl = ctk.CTkLabel(manual_frame, text="0 players", font=ctk.CTkFont(size=11), text_color="gray")
+        manual_lbl.pack(side="left")
+        manual_frame.pack_forget()
+
+        var_body = ctk.CTkFrame(frame, fg_color="transparent")
+
+        btn_row = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=8, pady=(2,6))
+        btn_dry = ctk.CTkButton(btn_row, text="Dry Run", width=90, height=26,
+                                fg_color="#1a4a7a", font=ctk.CTkFont(size=11),
+                                command=lambda k=key: self._run_grouped(k, dry_run=True))
+        btn_dry.pack(side="left", padx=(0,5))
+        btn_apply = ctk.CTkButton(btn_row, text="Apply", width=90, height=26,
+                                  fg_color="#1a7a1a", font=ctk.CTkFont(size=11),
+                                  command=lambda k=key: self._run_grouped(k, dry_run=False))
+        btn_apply.pack(side="left")
+
+        self.grouped_widgets[key] = {
+            "enabled_var"  : enabled_var,
+            "toggle_var"   : toggle_var,
+            "mode_var"     : mode_var,
+            "pct_var"      : pct_var,
+            "pct_frame"    : pct_frame,
+            "manual_frame" : manual_frame,
+            "manual_ids"   : manual_ids,
+            "manual_lbl"   : manual_lbl,
+            "std_row"      : std_row,
+            "var_body"     : var_body,
+            "btn_dry"      : btn_dry,
+            "btn_apply"    : btn_apply,
+            "variations"   : {},
+        }
+        self.detected_grouped[key] = []
+
+    def _toggle_grouped_mode(self, key):
+        gw = self.grouped_widgets[key]
+        if gw["toggle_var"].get():
+            gw["std_row"].pack_forget()
+            gw["var_body"].pack(fill="x", padx=8, pady=(0,4))
+            self._rebuild_grouped_rows(key)
+        else:
+            gw["var_body"].pack_forget()
+            gw["std_row"].pack(fill="x", padx=8, pady=(0,4))
+
+    def _toggle_grouped_std_mode(self, key):
+        gw = self.grouped_widgets[key]
+        if gw["mode_var"].get() == "percent":
+            gw["manual_frame"].pack_forget()
+            gw["pct_frame"].pack(side="left")
+        else:
+            gw["pct_frame"].pack_forget()
+            gw["manual_frame"].pack(side="left")
+
+    def _rebuild_grouped_rows(self, key):
+        gw   = self.grouped_widgets[key]
+        body = gw["var_body"]
+        for child in body.winfo_children():
+            child.destroy()
+        gw["variations"] = {}
+
+        variations = self.detected_grouped.get(key, [])
+        if not variations:
+            mod_root = self.cfg.get("modRootPath", "")
+            if mod_root:
+                prefix     = GROUPED_SECTIONS[key]["folder_prefix"]
+                variations = detect_grouped_variations(mod_root, prefix)
+                self.detected_grouped[key] = variations
+
+        if not variations:
+            ctk.CTkLabel(body, text="⚠  No variations detected. Set Mod Root Folder first.",
+                         text_color="#FF6B35", font=ctk.CTkFont(size=11)).pack(anchor="w", pady=4)
+            return
+
+        hdr = ctk.CTkFrame(body, fg_color="transparent")
+        hdr.pack(fill="x", pady=(2,0))
+        ctk.CTkLabel(hdr, text="Variation", width=180, font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+        ctk.CTkLabel(hdr, text="Mode",      width=140, font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+        ctk.CTkLabel(hdr, text="%",         width=55,  font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+
+        for lbl, folder_name in variations:
+            self._build_grouped_variation_row(body, key, lbl, folder_name)
+
+    def _build_grouped_variation_row(self, parent, key, label, folder_name):
+        row = ctk.CTkFrame(parent, fg_color="#2a2a2a", corner_radius=6)
+        row.pack(fill="x", pady=2)
+        ctk.CTkLabel(row, text=label, width=180, font=ctk.CTkFont(size=11), anchor="w").pack(side="left", padx=(8,0))
+
+        mode_var = ctk.StringVar(value="percent")
+        rf = ctk.CTkFrame(row, fg_color="transparent", width=140)
+        rf.pack(side="left")
+        ctk.CTkRadioButton(rf, text="%", variable=mode_var, value="percent", width=40,
+                           font=ctk.CTkFont(size=11),
+                           command=lambda k=key, l=label: self._toggle_grouped_var_mode(k, l)
+                           ).pack(side="left", padx=(4,2))
+        ctk.CTkRadioButton(rf, text="Manual", variable=mode_var, value="manual", width=70,
+                           font=ctk.CTkFont(size=11),
+                           command=lambda k=key, l=label: self._toggle_grouped_var_mode(k, l)
+                           ).pack(side="left", padx=(0,4))
+
+        pct_var   = ctk.IntVar(value=0)
+        pct_entry = ctk.CTkEntry(row, textvariable=pct_var, width=50, font=ctk.CTkFont(size=11))
+        pct_entry.pack(side="left", padx=4)
+        pct_var.trace_add("write", lambda *_, k=key, l=label: self._check_grouped_pct(k, l))
+
+        manual_frame = ctk.CTkFrame(row, fg_color="transparent")
+        manual_ids   = []
+        ctk.CTkButton(manual_frame, text="+ Add", width=70, height=24, font=ctk.CTkFont(size=11),
+                      command=lambda k=key, l=label: self._add_grouped_var_player(k, l)
+                      ).pack(side="left", padx=(0,3))
+        ctk.CTkButton(manual_frame, text="- Remove", width=80, height=24,
+                      fg_color="#7a1a1a", font=ctk.CTkFont(size=11),
+                      command=lambda k=key, l=label: self._remove_grouped_var_player(k, l)
+                      ).pack(side="left", padx=(0,3))
+        man_lbl = ctk.CTkLabel(manual_frame, text="0", font=ctk.CTkFont(size=11), text_color="gray")
+        man_lbl.pack(side="left")
+        manual_frame.pack_forget()
+
+        warn_lbl = ctk.CTkLabel(row, text="⚠ 100% — ALL eligible players",
+                                text_color="#FF6B35", font=ctk.CTkFont(size=10))
+
+        self.grouped_widgets[key]["variations"][label] = {
+            "folder_name"  : folder_name,
+            "mode_var"     : mode_var,
+            "pct_var"      : pct_var,
+            "pct_entry"    : pct_entry,
+            "manual_frame" : manual_frame,
+            "manual_ids"   : manual_ids,
+            "man_lbl"      : man_lbl,
+            "warn_lbl"     : warn_lbl,
+        }
+
+    def _toggle_grouped_var_mode(self, key, label):
+        vw = self.grouped_widgets[key]["variations"].get(label)
+        if not vw: return
+        if vw["mode_var"].get() == "percent":
+            vw["manual_frame"].pack_forget()
+            vw["pct_entry"].pack(side="left", padx=4)
+        else:
+            vw["pct_entry"].pack_forget()
+            vw["manual_frame"].pack(side="left", padx=4)
+
+    def _check_grouped_pct(self, key, label):
+        try:
+            vw = self.grouped_widgets[key]["variations"].get(label)
+            if not vw: return
+            if vw["pct_var"].get() >= 100:
+                vw["warn_lbl"].pack(side="left", padx=(4,0))
+            else:
+                vw["warn_lbl"].pack_forget()
+        except Exception:
+            pass
+
+    def _add_grouped_manual_player(self, key):
+        self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_grouped_manual(key, pid))
+
+    def _confirm_grouped_manual(self, key, pid):
+        gw = self.grouped_widgets[key]
+        if pid not in gw["manual_ids"]: gw["manual_ids"].append(pid)
+        gw["manual_lbl"].configure(text=f"{len(gw['manual_ids'])} player(s)")
+
+    def _remove_grouped_manual_player(self, key):
+        gw = self.grouped_widgets[key]
+        self._delete_player_dialog(
+            player_list=gw["manual_ids"],
+            on_done=lambda: gw["manual_lbl"].configure(text=f"{len(gw['manual_ids'])} player(s)"),
+            title=f"Remove Player from {GROUPED_SECTIONS[key]['label']}"
+        )
+
+    def _add_grouped_var_player(self, key, label):
+        self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_grouped_var(key, label, pid))
+
+    def _confirm_grouped_var(self, key, label, pid):
+        vw = self.grouped_widgets[key]["variations"].get(label)
+        if not vw: return
+        if pid not in vw["manual_ids"]: vw["manual_ids"].append(pid)
+        vw["man_lbl"].configure(text=f"{len(vw['manual_ids'])}")
+
+    def _remove_grouped_var_player(self, key, label):
+        vw = self.grouped_widgets[key]["variations"].get(label)
+        if not vw: return
+        self._delete_player_dialog(
+            player_list=vw["manual_ids"],
+            on_done=lambda: vw["man_lbl"].configure(text=f"{len(vw['manual_ids'])}"),
+            title=f"Remove Player from {label}"
+        )
+
+    def _has_any_100_grouped(self, key):
+        hits = []
+        for label, vw in self.grouped_widgets[key]["variations"].items():
+            if vw["mode_var"].get() == "percent":
+                try:
+                    if vw["pct_var"].get() >= 100: hits.append(label)
+                except Exception: pass
+        return hits
+
+    # ── standard per-variation (PER_VARIATION_KEYS mods) ─────────────────────
+
+    def _toggle_variation_mode(self, key):
+        w = self.mod_widgets[key]
+        if w["variation_toggle_var"].get():
+            w["standard_row2"].pack_forget()
+            w["standard_row3"].pack_forget()
+            w["variation_body_frame"].pack(fill="x", padx=8, pady=(0,6))
+            self._rebuild_variation_rows(key)
+        else:
+            w["variation_body_frame"].pack_forget()
+            w["standard_row2"].pack(fill="x", padx=8, pady=(0,4))
+            w["standard_row3"].pack(fill="x", padx=8, pady=(2,6))
+
+    def _rebuild_variation_rows(self, key):
+        w    = self.mod_widgets[key]
+        body = w["variation_body_frame"]
+        for child in body.winfo_children():
+            child.destroy()
+        self.variation_widgets[key] = {}
+
+        variations = self.detected_variations.get(key, [])
+        if not variations:
+            mod_root = self.cfg.get("modRootPath", "")
+            if mod_root:
+                folder     = PER_VARIATION_KEYS[key]
+                variations = detect_variations(mod_root, folder)
+                self.detected_variations[key] = variations
+
+        if not variations:
+            ctk.CTkLabel(body, text="⚠  No variations detected. Set Mod Root Folder first.",
+                         text_color="#FF6B35", font=ctk.CTkFont(size=11)).pack(anchor="w", pady=4)
+            self._build_variation_run_buttons(body, key)
+            return
+
+        hdr = ctk.CTkFrame(body, fg_color="transparent")
+        hdr.pack(fill="x", pady=(2,0))
+        ctk.CTkLabel(hdr, text="Variation", width=160, font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+        ctk.CTkLabel(hdr, text="Mode",      width=160, font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+        ctk.CTkLabel(hdr, text="%",         width=60,  font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(side="left")
+
+        for var_name in variations:
+            self._build_variation_row(body, key, var_name)
+        self._build_variation_run_buttons(body, key)
+
+    def _build_variation_row(self, parent, key, var_name):
+        row = ctk.CTkFrame(parent, fg_color="#2a2a2a", corner_radius=6)
+        row.pack(fill="x", pady=2)
+        ctk.CTkLabel(row, text=var_name, width=160, font=ctk.CTkFont(size=11), anchor="w").pack(side="left", padx=(8,0))
+
+        mode_var = ctk.StringVar(value="percent")
+        rf = ctk.CTkFrame(row, fg_color="transparent", width=160)
+        rf.pack(side="left")
+        ctk.CTkRadioButton(rf, text="%", variable=mode_var, value="percent", width=45,
+                           font=ctk.CTkFont(size=11),
+                           command=lambda k=key, v=var_name: self._toggle_var_mode(k, v)
+                           ).pack(side="left", padx=(4,2))
+        ctk.CTkRadioButton(rf, text="Manual", variable=mode_var, value="manual", width=70,
+                           font=ctk.CTkFont(size=11),
+                           command=lambda k=key, v=var_name: self._toggle_var_mode(k, v)
+                           ).pack(side="left", padx=(0,4))
+
+        pct_var   = ctk.IntVar(value=0)
+        pct_entry = ctk.CTkEntry(row, textvariable=pct_var, width=50, font=ctk.CTkFont(size=11))
+        pct_entry.pack(side="left", padx=4)
+        pct_var.trace_add("write", lambda *_, k=key, v=var_name: self._check_variation_pct(k, v))
+
+        manual_frame = ctk.CTkFrame(row, fg_color="transparent")
+        manual_ids   = []
+        ctk.CTkButton(manual_frame, text="+ Add", width=70, height=24, font=ctk.CTkFont(size=11),
+                      command=lambda k=key, v=var_name: self._add_variation_player(k, v)
+                      ).pack(side="left", padx=(0,3))
+        ctk.CTkButton(manual_frame, text="- Remove", width=80, height=24,
+                      fg_color="#7a1a1a", font=ctk.CTkFont(size=11),
+                      command=lambda k=key, v=var_name: self._remove_variation_player(k, v)
+                      ).pack(side="left", padx=(0,3))
+        man_lbl = ctk.CTkLabel(manual_frame, text="0", font=ctk.CTkFont(size=11), text_color="gray")
+        man_lbl.pack(side="left")
+        manual_frame.pack_forget()
+
+        warn_lbl = ctk.CTkLabel(row, text="⚠ 100% — ALL eligible players",
+                                text_color="#FF6B35", font=ctk.CTkFont(size=10))
+
+        self.variation_widgets[key][var_name] = {
+            "mode_var"     : mode_var,
+            "pct_var"      : pct_var,
+            "pct_entry"    : pct_entry,
+            "manual_frame" : manual_frame,
+            "manual_ids"   : manual_ids,
+            "man_lbl"      : man_lbl,
+            "warn_lbl"     : warn_lbl,
+        }
+
+    def _build_variation_run_buttons(self, parent, key):
+        btn_row = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_row.pack(fill="x", pady=(4,2))
+        btn_dry = ctk.CTkButton(btn_row, text="Dry Run", width=90, height=26,
+                                fg_color="#1a4a7a", font=ctk.CTkFont(size=11),
+                                command=lambda k=key: self._run_section(k, dry_run=True))
+        btn_dry.pack(side="left", padx=(0,5))
+        btn_apply = ctk.CTkButton(btn_row, text="Apply", width=90, height=26,
+                                  fg_color="#1a7a1a", font=ctk.CTkFont(size=11),
+                                  command=lambda k=key: self._run_section(k, dry_run=False))
+        btn_apply.pack(side="left")
+        self.mod_widgets[key]["btn_var_dry"]   = btn_dry
+        self.mod_widgets[key]["btn_var_apply"] = btn_apply
+
+    def _toggle_var_mode(self, key, var_name):
+        vw = self.variation_widgets[key].get(var_name)
+        if not vw: return
+        if vw["mode_var"].get() == "percent":
+            vw["manual_frame"].pack_forget()
+            vw["pct_entry"].pack(side="left", padx=4)
+        else:
+            vw["pct_entry"].pack_forget()
+            vw["manual_frame"].pack(side="left", padx=4)
+
+    def _check_variation_pct(self, key, var_name):
+        try:
+            vw = self.variation_widgets[key].get(var_name)
+            if not vw: return
+            if vw["pct_var"].get() >= 100:
+                vw["warn_lbl"].pack(side="left", padx=(4,0))
+            else:
+                vw["warn_lbl"].pack_forget()
+        except Exception:
+            pass
+
+    def _add_variation_player(self, key, var_name):
+        self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_add_variation(key, var_name, pid))
+
+    def _confirm_add_variation(self, key, var_name, pid):
+        vw = self.variation_widgets[key][var_name]
+        if pid not in vw["manual_ids"]: vw["manual_ids"].append(pid)
+        vw["man_lbl"].configure(text=f"{len(vw['manual_ids'])}")
+
+    def _remove_variation_player(self, key, var_name):
+        vw = self.variation_widgets[key][var_name]
+        self._delete_player_dialog(
+            player_list=vw["manual_ids"],
+            on_done=lambda: vw["man_lbl"].configure(text=f"{len(vw['manual_ids'])}"),
+            title=f"Remove Player from {var_name}"
+        )
+
+    def _has_any_100_variation(self, key):
+        hits = []
+        for var_name, vw in self.variation_widgets[key].items():
+            if vw["mode_var"].get() == "percent":
+                try:
+                    if vw["pct_var"].get() >= 100: hits.append(var_name)
+                except Exception: pass
+        return hits
+
+    # ── standard mode toggle ──────────────────────────────────────────────────
+
+    def _toggle_mode(self, key):
+        w = self.mod_widgets[key]
+        if w["mode_var"].get() == "percent":
+            w["manual_frame"].pack_forget()
+            w["pct_frame"].pack(side="left")
+        else:
+            w["pct_frame"].pack_forget()
+            w["manual_frame"].pack(side="left")
+
+    def _add_manual_player(self, key):
+        self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_add_to_mod(key, pid, name))
+
+    def _confirm_add_to_mod(self, key, pid, name):
+        w = self.mod_widgets[key]
+        if pid not in w["manual_ids"]: w["manual_ids"].append(pid)
+        w["manual_lbl"].configure(text=f"{len(w['manual_ids'])} player(s)")
+
+    # ── handtape section ──────────────────────────────────────────────────────
 
     def _build_handtape_section(self, parent):
         frame = ctk.CTkFrame(parent, border_width=2, border_color="#8B4513")
         frame.pack(fill="x", padx=5, pady=(10,4))
-
         ctk.CTkLabel(frame, text="Handtape (Manual Only)",
                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=8, pady=(6,2))
-
-        warn = ctk.CTkLabel(frame,
+        ctk.CTkLabel(frame,
             text="⚠  WARNING: Do not use for players with in-game arm tattoos — it will overwrite them.",
-            text_color="#FF6B35", font=ctk.CTkFont(size=11), wraplength=480, justify="left")
-        warn.pack(anchor="w", padx=8, pady=(0,6))
+            text_color="#FF6B35", font=ctk.CTkFont(size=11), wraplength=480, justify="left"
+        ).pack(anchor="w", padx=8, pady=(0,6))
 
         app_row = ctk.CTkFrame(frame, fg_color="transparent")
         app_row.pack(fill="x", padx=8, pady=(0,4))
         ctk.CTkLabel(app_row, text="PESEditor CSV:").pack(side="left")
-        self.lbl_appearance = ctk.CTkLabel(app_row, text="Not selected", text_color="gray",
-                                            font=ctk.CTkFont(size=11))
+        self.lbl_appearance = ctk.CTkLabel(app_row, text="Not selected", text_color="gray", font=ctk.CTkFont(size=11))
         self.lbl_appearance.pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(app_row, text="Browse", width=80,
-                      command=self._choose_appearance_csv).pack(side="right")
+        ctk.CTkButton(app_row, text="Browse", width=80, command=self._choose_appearance_csv).pack(side="right")
 
         pid_row = ctk.CTkFrame(frame, fg_color="transparent")
         pid_row.pack(fill="x", padx=8, pady=(0,4))
         ctk.CTkButton(pid_row, text="+ Add Player", width=120, command=self._ht_add_player).pack(side="left", padx=(0,8))
-        self.ht_players_lbl = ctk.CTkLabel(pid_row, text="No players added",
-                                            font=ctk.CTkFont(size=11), text_color="gray")
+        self.ht_players_lbl = ctk.CTkLabel(pid_row, text="No players added", font=ctk.CTkFont(size=11), text_color="gray")
         self.ht_players_lbl.pack(side="left", padx=8, fill="x", expand=True)
-        ctk.CTkButton(pid_row, text="Clear", width=60, fg_color="gray40",
-                      command=self._ht_clear_players).pack(side="right", padx=(4,0))
-        ctk.CTkButton(pid_row, text="- Remove", width=90, fg_color="#7a1a1a",
-                      command=self._ht_delete_player).pack(side="right")
+        ctk.CTkButton(pid_row, text="Clear", width=60, fg_color="gray40", command=self._ht_clear_players).pack(side="right", padx=(4,0))
+        ctk.CTkButton(pid_row, text="- Remove", width=90, fg_color="#7a1a1a", command=self._ht_delete_player).pack(side="right")
 
         hand_row = ctk.CTkFrame(frame, fg_color="transparent")
         hand_row.pack(fill="x", padx=8, pady=(0,8))
@@ -352,86 +805,65 @@ class App(ctk.CTk):
         self.ht_players = []
         self.appearance_csv_path = ""
 
-    # ── mode toggle ───────────────────────────────────────────────────────────
-
-    def _toggle_mode(self, key):
-        w = self.mod_widgets[key]
-        if w["mode_var"].get() == "percent":
-            w["manual_frame"].pack_forget()
-            w["pct_frame"].pack(side="left")
-        else:
-            w["pct_frame"].pack_forget()
-            w["manual_frame"].pack(side="left")
-
-    # ── manual player management ──────────────────────────────────────────────
-
-    def _add_manual_player(self, key):
-        self._player_search_dialog(
-            on_confirm=lambda pid, name: self._confirm_add_to_mod(key, pid, name)
-        )
-
-    def _confirm_add_to_mod(self, key, pid, name):
-        w = self.mod_widgets[key]
-        if pid not in w["manual_ids"]:
-            w["manual_ids"].append(pid)
-        w["manual_lbl"].configure(text=f"{len(w['manual_ids'])} player(s)")
-
-    # ── handtape helpers ──────────────────────────────────────────────────────
-
     def _choose_appearance_csv(self):
-        path = filedialog.askopenfilename(
-            title="Select PESEditor Appearance CSV",
-            filetypes=[("CSV files","*.csv"),("All files","*.*")]
-        )
+        path = filedialog.askopenfilename(title="Select PESEditor Appearance CSV",
+                                          filetypes=[("CSV files","*.csv"),("All files","*.*")])
         if path:
             self.appearance_csv_path = path
             self.lbl_appearance.configure(text=os.path.basename(path), text_color="lightgreen")
 
     def _ht_add_player(self):
-        self._player_search_dialog(
-            on_confirm=lambda pid, name: self._confirm_add_ht(pid, name)
-        )
+        self._player_search_dialog(on_confirm=lambda pid, name: self._confirm_add_ht(pid, name))
 
     def _confirm_add_ht(self, pid, name):
-        if pid not in self.ht_players:
-            self.ht_players.append(pid)
+        if pid not in self.ht_players: self.ht_players.append(pid)
         self._refresh_ht_label()
 
+    def _ht_clear_players(self):
+        self.ht_players.clear()
+        self._refresh_ht_label()
+
+    def _ht_delete_player(self):
+        self._delete_player_dialog(player_list=self.ht_players, on_done=self._refresh_ht_label,
+                                   title="Remove Handtape Player")
+
+    def _refresh_ht_label(self):
+        count = len(self.ht_players)
+        if count == 0:
+            self.ht_players_lbl.configure(text="No players added", text_color="gray")
+        else:
+            names = [self.id_to_name.get(pid, pid) for pid in self.ht_players[-3:]]
+            self.ht_players_lbl.configure(text=f"{count} player(s): {', '.join(names)}", text_color="lightgreen")
+
+    # ── player dialogs ────────────────────────────────────────────────────────
+
     def _delete_player_dialog(self, player_list, on_done, title="Remove Player"):
-        """Show a list of added players and let the user remove one."""
         if not player_list:
             messagebox.showinfo("No Players", "No players to remove.")
             return
-
         dialog = ctk.CTkToplevel(self)
         dialog.title(title)
         dialog.geometry("420x360")
         dialog.grab_set()
         dialog.focus()
-
-        ctk.CTkLabel(dialog, text="Select a player to remove:",
-                     font=ctk.CTkFont(size=13)).pack(pady=(14,8))
-
+        ctk.CTkLabel(dialog, text="Select a player to remove:", font=ctk.CTkFont(size=13)).pack(pady=(14,8))
         scroll = ctk.CTkScrollableFrame(dialog, height=220)
         scroll.pack(fill="x", padx=16, pady=(0,8))
-
         selected = {"pid": None, "btn": None}
         confirm_btn_ref = {}
 
         def select(pid, btn):
-            if selected["btn"]:
-                selected["btn"].configure(fg_color="transparent")
+            if selected["btn"]: selected["btn"].configure(fg_color="transparent")
             selected["pid"] = pid
             selected["btn"] = btn
             btn.configure(fg_color="#7a1a1a")
             confirm_btn_ref["btn"].configure(state="normal")
 
         for pid in list(player_list):
-            name = self.id_to_name.get(pid, "")
+            name  = self.id_to_name.get(pid, "")
             label = f"{pid}  —  {name}" if name else pid
-            btn = ctk.CTkButton(scroll, text=label, anchor="w",
-                                fg_color="transparent", hover_color="#5a1a1a",
-                                font=ctk.CTkFont(size=12))
+            btn   = ctk.CTkButton(scroll, text=label, anchor="w", fg_color="transparent",
+                                  hover_color="#5a1a1a", font=ctk.CTkFont(size=12))
             btn.configure(command=lambda p=pid, b=btn: select(p, b))
             btn.pack(fill="x", pady=1)
 
@@ -440,138 +872,79 @@ class App(ctk.CTk):
 
         def do_remove():
             pid = selected["pid"]
-            if pid and pid in player_list:
-                player_list.remove(pid)
+            if pid and pid in player_list: player_list.remove(pid)
             on_done()
             dialog.destroy()
 
         confirm_btn = ctk.CTkButton(btn_row, text="Remove Player", width=140,
-                                    fg_color="#7a1a1a", state="disabled",
-                                    command=do_remove)
+                                    fg_color="#7a1a1a", state="disabled", command=do_remove)
         confirm_btn.pack(side="left", padx=(0,10))
         confirm_btn_ref["btn"] = confirm_btn
         ctk.CTkButton(btn_row, text="Cancel", width=100, fg_color="gray40",
                       command=dialog.destroy).pack(side="left")
 
     def _player_search_dialog(self, on_confirm):
-        """Modal search dialog: type name or ID, see results, confirm to add."""
         dialog = ctk.CTkToplevel(self)
         dialog.title("Player Search")
         dialog.geometry("480x400")
         dialog.grab_set()
         dialog.focus()
-
         ctk.CTkLabel(dialog, text="Search by name or ID:", font=ctk.CTkFont(size=13)).pack(pady=(14,4))
-
         search_var = ctk.StringVar()
         entry = ctk.CTkEntry(dialog, textvariable=search_var, width=340, placeholder_text="e.g. Messi or 158023")
         entry.pack(pady=(0,8))
         entry.focus()
-
         result_box = ctk.CTkScrollableFrame(dialog, height=220)
         result_box.pack(fill="x", padx=16, pady=(0,8))
-
         status_lbl = ctk.CTkLabel(dialog, text="", font=ctk.CTkFont(size=11), text_color="gray")
         status_lbl.pack()
-
         selected = {"pid": None, "name": None}
-        btn_refs = []
+        btn_refs  = []
 
         def do_search(*_):
-            # Clear old results
-            for w in result_box.winfo_children():
-                w.destroy()
+            for w in result_box.winfo_children(): w.destroy()
             btn_refs.clear()
-            selected["pid"] = None
-            selected["name"] = None
+            selected["pid"] = None; selected["name"] = None
             confirm_btn.configure(state="disabled")
-
             query = search_var.get().strip()
-            if not query:
-                return
-
+            if not query: return
             results = []
             if query.isdigit():
-                # ID lookup
-                pid = query
+                pid  = query
                 name = self.id_to_name.get(pid, "")
-                if name:
-                    results = [(pid, name)]
-                elif pid in self.id_to_name or any(pid == i for i in (self.id_to_name or {})):
-                    results = [(pid, "")]
-                else:
-                    status_lbl.configure(text="No player found with that ID.")
+                if name: results = [(pid, name)]
+                elif pid in self.id_to_name: results = [(pid, "")]
+                else: status_lbl.configure(text="No player found with that ID.")
             else:
-                # Name search (case-insensitive partial)
-                q = query.lower()
-                results = [(pid, name) for pid, name in self.id_to_name.items()
-                           if q in name.lower()]
+                q       = query.lower()
+                results = [(pid, name) for pid, name in self.id_to_name.items() if q in name.lower()]
                 results = sorted(results, key=lambda x: x[1])[:50]
-                if not results:
-                    status_lbl.configure(text="No players found matching that name.")
-                else:
-                    status_lbl.configure(text=f"{len(results)} result(s) — click to select")
-
+                if not results: status_lbl.configure(text="No players found matching that name.")
+                else: status_lbl.configure(text=f"{len(results)} result(s) — click to select")
             for pid, name in results:
-                label = f"{pid}  —  {name}" if name else pid
-                btn = ctk.CTkButton(result_box, text=label, anchor="w",
-                                    fg_color="transparent", hover_color="#2a4a6a",
-                                    font=ctk.CTkFont(size=12),
+                lbl = f"{pid}  —  {name}" if name else pid
+                btn = ctk.CTkButton(result_box, text=lbl, anchor="w", fg_color="transparent",
+                                    hover_color="#2a4a6a", font=ctk.CTkFont(size=12),
                                     command=lambda p=pid, n=name: select_player(p, n))
                 btn.pack(fill="x", pady=1)
                 btn_refs.append(btn)
 
         def select_player(pid, name):
-            selected["pid"] = pid
-            selected["name"] = name
+            selected["pid"] = pid; selected["name"] = name
             display = f"{name}  (ID: {pid})" if name else f"ID: {pid}"
-            status_lbl.configure(
-                text=f"Selected: {display}",
-                text_color="lightgreen"
-            )
+            status_lbl.configure(text=f"Selected: {display}", text_color="lightgreen")
             confirm_btn.configure(state="normal")
 
         search_var.trace_add("write", do_search)
         entry.bind("<Return>", do_search)
-
         btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
         btn_row.pack(pady=(4,12))
-
         confirm_btn = ctk.CTkButton(btn_row, text="Add Player", width=130, state="disabled",
                                     fg_color="#1a7a1a",
-                                    command=lambda: [
-                                        on_confirm(selected["pid"], selected["name"]),
-                                        dialog.destroy()
-                                    ])
+                                    command=lambda: [on_confirm(selected["pid"], selected["name"]), dialog.destroy()])
         confirm_btn.pack(side="left", padx=(0,10))
         ctk.CTkButton(btn_row, text="Cancel", width=100, fg_color="gray40",
                       command=dialog.destroy).pack(side="left")
-
-    def _refresh_ht_label(self):
-        count = len(self.ht_players)
-        if count == 0:
-            self.ht_players_lbl.configure(text="No players added", text_color="gray")
-        else:
-            names = []
-            for pid in self.ht_players[-3:]:
-                n = self.id_to_name.get(pid, pid)
-                names.append(n)
-            self.ht_players_lbl.configure(
-                text=f"{count} player(s): {', '.join(names)}",
-                text_color="lightgreen"
-            )
-
-    def _ht_clear_players(self):
-        self.ht_players.clear()
-        self._refresh_ht_label()
-
-    def _ht_delete_player(self):
-        """Show a dialog to remove a player from the handtape list."""
-        self._delete_player_dialog(
-            player_list=self.ht_players,
-            on_done=self._refresh_ht_label,
-            title="Remove Handtape Player"
-        )
 
     # ── file choosers ─────────────────────────────────────────────────────────
 
@@ -582,6 +955,30 @@ class App(ctk.CTk):
             self.cfg["modRootPath"] = path
             save_config(self.cfg)
             self._log(f"Mod root set: {path}")
+            self._detect_all_variations(path)
+
+    def _detect_all_variations(self, mod_root):
+        for key, folder in PER_VARIATION_KEYS.items():
+            variations = detect_variations(mod_root, folder)
+            self.detected_variations[key] = variations
+            if variations:
+                self._log(f"  [{MOD_LABELS[key]}] {len(variations)} variation(s): {', '.join(variations)}")
+            else:
+                self._log(f"  [{MOD_LABELS[key]}] No variations detected")
+            w = self.mod_widgets.get(key)
+            if w and w["variation_toggle_var"] and w["variation_toggle_var"].get():
+                self._rebuild_variation_rows(key)
+
+        for key, info in GROUPED_SECTIONS.items():
+            variations = detect_grouped_variations(mod_root, info["folder_prefix"])
+            self.detected_grouped[key] = variations
+            if variations:
+                self._log(f"  [{info['label']}] {len(variations)} variation(s): {', '.join(l for l,_ in variations)}")
+            else:
+                self._log(f"  [{info['label']}] No variations detected")
+            gw = self.grouped_widgets.get(key)
+            if gw and gw["toggle_var"].get():
+                self._rebuild_grouped_rows(key)
 
     def _choose_db_file(self):
         path = filedialog.askopenfilename(
@@ -609,21 +1006,32 @@ class App(ctk.CTk):
     # ── settings ──────────────────────────────────────────────────────────────
 
     def _load_ui_from_config(self):
-        root = self.cfg.get("modRootPath","")
+        root = self.cfg.get("modRootPath", "")
         if root:
             self.lbl_root.configure(text=root, text_color="lightgreen")
+            self._detect_all_variations(root)
 
         mods = self.cfg.get("mods", {})
         for key, w in self.mod_widgets.items():
             mod = mods.get(key, {})
-            if "enabled" in mod:
-                w["enabled_var"].set(mod["enabled"])
-            # percentages always start at 0 on launch
+            if "enabled" in mod: w["enabled_var"].set(mod["enabled"])
             w["pct_var"].set(0)
             manual = mod.get("manualPlayerIds", [])
             if manual:
                 w["manual_ids"].extend(manual)
                 w["manual_lbl"].configure(text=f"{len(w['manual_ids'])} player(s)")
+            if w["variation_toggle_var"] and mod.get("perVariationMode", False):
+                w["variation_toggle_var"].set(True)
+                self._toggle_variation_mode(key)
+
+        grouped_cfg = self.cfg.get("grouped", {})
+        for key, gw in self.grouped_widgets.items():
+            grp = grouped_cfg.get(key, {})
+            if "enabled" in grp: gw["enabled_var"].set(grp["enabled"])
+            gw["pct_var"].set(0)
+            if grp.get("perVariationMode", False):
+                gw["toggle_var"].set(True)
+                self._toggle_grouped_mode(key)
 
     def _save_settings(self):
         mods = self.cfg.setdefault("mods", {})
@@ -632,10 +1040,41 @@ class App(ctk.CTk):
             mod["enabled"]         = w["enabled_var"].get()
             mod["percent"]         = w["pct_var"].get()
             mod["manualPlayerIds"] = w["manual_ids"]
+            if w["variation_toggle_var"]:
+                per_var = w["variation_toggle_var"].get()
+                mod["perVariationMode"] = per_var
+                if per_var:
+                    var_cfg = {}
+                    for var_name, vw in self.variation_widgets[key].items():
+                        var_cfg[var_name] = {
+                            "mode"      : vw["mode_var"].get(),
+                            "percent"   : vw["pct_var"].get(),
+                            "manualIds" : vw["manual_ids"],
+                        }
+                    mod["variationSettings"] = var_cfg
+
+        grouped = self.cfg.setdefault("grouped", {})
+        for key, gw in self.grouped_widgets.items():
+            grp = grouped.setdefault(key, {})
+            grp["enabled"]         = gw["enabled_var"].get()
+            grp["percent"]         = gw["pct_var"].get()
+            grp["manualPlayerIds"] = gw["manual_ids"]
+            per_var = gw["toggle_var"].get()
+            grp["perVariationMode"] = per_var
+            if per_var:
+                var_cfg = {}
+                for label, vw in gw["variations"].items():
+                    var_cfg[label] = {
+                        "folder_name" : vw["folder_name"],
+                        "mode"        : vw["mode_var"].get(),
+                        "percent"     : vw["pct_var"].get(),
+                        "manualIds"   : vw["manual_ids"],
+                    }
+                grp["variationSettings"] = var_cfg
+
         save_config(self.cfg)
         self._log("Settings saved.")
 
-        # Copy DB and Appearance files to "DB and Appearances" folder
         dest_folder = os.path.join(PACKAGE_DIR, "DB and Appearances")
         os.makedirs(dest_folder, exist_ok=True)
         copied = []
@@ -648,7 +1087,7 @@ class App(ctk.CTk):
         if copied:
             self._log(f"Saved to 'DB and Appearances': {', '.join(copied)}")
 
-    # ── helpers: disable/enable ALL run buttons at once ───────────────────────
+    # ── button state ──────────────────────────────────────────────────────────
 
     def _set_all_buttons(self, state):
         self.btn_dry.configure(state=state)
@@ -656,50 +1095,102 @@ class App(ctk.CTk):
         for w in self.mod_widgets.values():
             w["btn_sec_dry"].configure(state=state)
             w["btn_sec_apply"].configure(state=state)
+            if w.get("btn_var_dry"):   w["btn_var_dry"].configure(state=state)
+            if w.get("btn_var_apply"): w["btn_var_apply"].configure(state=state)
+        for gw in self.grouped_widgets.values():
+            gw["btn_dry"].configure(state=state)
+            gw["btn_apply"].configure(state=state)
 
-    # ── run: per-section ──────────────────────────────────────────────────────
+    # ── run: standard section ─────────────────────────────────────────────────
 
     def _run_section(self, key, dry_run=False):
         self._save_settings()
-        root = self.cfg.get("modRootPath","")
+        root = self.cfg.get("modRootPath", "")
         if not root or not os.path.isdir(root):
             messagebox.showwarning("Missing Folder", "Please select a Mod Root Folder first.")
             return
         if not os.path.exists(PLAYERID_CSV):
             messagebox.showwarning("Missing DB", "Please select a Player DB file first.")
             return
+        w = self.mod_widgets[key]
+        if w["variation_toggle_var"] and w["variation_toggle_var"].get():
+            hits = self._has_any_100_variation(key)
+            if hits and not dry_run:
+                if not messagebox.askyesno("⚠ 100% Assignment Warning",
+                    f"Variations set to 100%:\n\n  {', '.join(hits)}\n\nEVERY eligible player will be assigned. Continue?"):
+                    return
         if not dry_run:
             if not messagebox.askyesno("Confirm Apply",
-                f"This will COPY folders for {MOD_LABELS[key]} into your mod directory.\n\nContinue?"):
+                f"This will COPY folders for {MOD_LABELS[key]}.\n\nContinue?"):
                 return
-
-        mode = "DryRun" if dry_run else "Run"
-        label = MOD_LABELS[key]
-        mode_label = f"{'Dry Run' if dry_run else 'Apply'}: {label}"
-
+        mode       = "DryRun" if dry_run else "Run"
+        mode_label = f"{'Dry Run' if dry_run else 'Apply'}: {MOD_LABELS[key]}"
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: {mode_label}...")
 
         def run():
             script = os.path.join(PACKAGE_DIR, "Run-FL26-ModAutomation.ps1")
-            cmd = [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                "-File", script,
-                "-Mode", mode,
-                "-ConfigPath", CONFIG_PATH,
-                "-SingleMod", key
-            ]
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                   "-File", script, "-Mode", mode, "-ConfigPath", CONFIG_PATH, "-SingleMod", key]
             try:
-                proc = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace"
-                )
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
+                                        text=True, encoding="utf-8", errors="replace")
                 for line in proc.stdout:
                     self.after(0, self._log, line.rstrip())
                 proc.wait()
-                exit_code = proc.returncode
                 self.after(0, self._set_all_buttons, "normal")
-                if exit_code == 0:
+                if proc.returncode == 0:
+                    self.after(0, self.lbl_status.configure, {"text": f"Status: {mode_label} done", "text_color": "lightgreen"})
+                    self.after(0, messagebox.showinfo, "Done", f"{mode_label} completed successfully.")
+                else:
+                    self.after(0, self.lbl_status.configure, {"text": f"Status: {mode_label} errors", "text_color": "#FF6B35"})
+                    self.after(0, messagebox.showwarning, "Errors", "Finished with errors. Check the log.")
+            except Exception as e:
+                self.after(0, self._log, f"[ERROR] {e}")
+                self.after(0, self.lbl_status.configure, {"text": "Status: Error", "text_color": "red"})
+                self.after(0, self._set_all_buttons, "normal")
+
+        threading.Thread(target=run, daemon=True).start()
+
+    # ── run: grouped section ──────────────────────────────────────────────────
+
+    def _run_grouped(self, key, dry_run=False):
+        self._save_settings()
+        root = self.cfg.get("modRootPath", "")
+        if not root or not os.path.isdir(root):
+            messagebox.showwarning("Missing Folder", "Please select a Mod Root Folder first.")
+            return
+        if not os.path.exists(PLAYERID_CSV):
+            messagebox.showwarning("Missing DB", "Please select a Player DB file first.")
+            return
+        gw = self.grouped_widgets[key]
+        if gw["toggle_var"].get():
+            hits = self._has_any_100_grouped(key)
+            if hits and not dry_run:
+                if not messagebox.askyesno("⚠ 100% Assignment Warning",
+                    f"Variations set to 100%:\n\n  {', '.join(hits)}\n\nEVERY eligible player will be assigned. Continue?"):
+                    return
+        if not dry_run:
+            if not messagebox.askyesno("Confirm Apply",
+                f"This will COPY folders for {GROUPED_SECTIONS[key]['label']}.\n\nContinue?"):
+                return
+        mode       = "DryRun" if dry_run else "Run"
+        mode_label = f"{'Dry Run' if dry_run else 'Apply'}: {GROUPED_SECTIONS[key]['label']}"
+        self._set_all_buttons("disabled")
+        self.lbl_status.configure(text=f"Status: {mode_label}...")
+
+        def run():
+            script = os.path.join(PACKAGE_DIR, "Run-FL26-ModAutomation.ps1")
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                   "-File", script, "-Mode", mode, "-ConfigPath", CONFIG_PATH, "-SingleMod", key]
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
+                                        text=True, encoding="utf-8", errors="replace")
+                for line in proc.stdout:
+                    self.after(0, self._log, line.rstrip())
+                proc.wait()
+                self.after(0, self._set_all_buttons, "normal")
+                if proc.returncode == 0:
                     self.after(0, self.lbl_status.configure, {"text": f"Status: {mode_label} done", "text_color": "lightgreen"})
                     self.after(0, messagebox.showinfo, "Done", f"{mode_label} completed successfully.")
                 else:
@@ -720,42 +1211,47 @@ class App(ctk.CTk):
 
     def _run_real(self):
         self._save_settings()
-        if not messagebox.askyesno("Confirm RUN ALL",
-            "This will COPY folders for ALL enabled mods into your mod directories.\n\nContinue?"):
+        warnings = []
+        for key, w in self.mod_widgets.items():
+            if w["variation_toggle_var"] and w["variation_toggle_var"].get():
+                hits = self._has_any_100_variation(key)
+                if hits: warnings.append(f"{MOD_LABELS[key]}: {', '.join(hits)}")
+        for key, gw in self.grouped_widgets.items():
+            if gw["toggle_var"].get():
+                hits = self._has_any_100_grouped(key)
+                if hits: warnings.append(f"{GROUPED_SECTIONS[key]['label']}: {', '.join(hits)}")
+        if warnings:
+            warn_text = "\n".join(f"  • {w}" for w in warnings)
+            if not messagebox.askyesno("⚠ 100% Assignment Warning",
+                f"The following variations are set to 100%:\n\n{warn_text}\n\nEVERY eligible player will be assigned. Continue?"):
+                return
+        if not messagebox.askyesno("Confirm RUN ALL", "This will COPY folders for ALL enabled mods.\n\nContinue?"):
             return
         self._execute("Run")
 
     def _execute(self, mode):
-        root = self.cfg.get("modRootPath","")
+        root = self.cfg.get("modRootPath", "")
         if not root or not os.path.isdir(root):
             messagebox.showwarning("Missing Folder", "Please select a Mod Root Folder first.")
             return
         if not os.path.exists(PLAYERID_CSV):
             messagebox.showwarning("Missing DB", "Please select a Player DB file first.")
             return
-
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: Running {mode}...")
 
         def run():
             script = os.path.join(PACKAGE_DIR, "Run-FL26-ModAutomation.ps1")
-            cmd = [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                "-File", script,
-                "-Mode", mode,
-                "-ConfigPath", CONFIG_PATH
-            ]
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                   "-File", script, "-Mode", mode, "-ConfigPath", CONFIG_PATH]
             try:
-                proc = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace"
-                )
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
+                                        text=True, encoding="utf-8", errors="replace")
                 for line in proc.stdout:
                     self.after(0, self._log, line.rstrip())
                 proc.wait()
-                exit_code = proc.returncode
                 self.after(0, self._set_all_buttons, "normal")
-                if exit_code == 0:
+                if proc.returncode == 0:
                     self.after(0, self.lbl_status.configure, {"text": "Status: Completed successfully", "text_color": "lightgreen"})
                     self.after(0, messagebox.showinfo, "Done", f"{mode} completed successfully.")
                 else:
@@ -781,13 +1277,11 @@ class App(ctk.CTk):
         if not hands:
             messagebox.showwarning("No Hand", "Please select at least one hand.")
             return
-
-        root    = self.cfg.get("modRootPath","")
+        root    = self.cfg.get("modRootPath", "")
         ht_root = os.path.join(root, "xTexture_Hand Tape")
         if not os.path.isdir(ht_root):
             messagebox.showerror("Folder Not Found", f"Handtape folder not found:\n{ht_root}")
             return
-
         mode_label = "Dry Run Handtape" if dry_run else "Handtape"
         self._set_all_buttons("disabled")
         self.lbl_status.configure(text=f"Status: Running {mode_label}...")
@@ -796,21 +1290,16 @@ class App(ctk.CTk):
             script     = os.path.join(PACKAGE_DIR, "Assign-Handtape.ps1")
             ids_pipe   = "|".join(self.ht_players)
             hands_pipe = "|".join(hands)
-            cmd = [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                "-File", script,
-                "-AppearanceCsvPath", self.appearance_csv_path,
-                "-RootPath",          ht_root,
-                "-PlayerIdsPipe",     ids_pipe,
-                "-HandsPipe",         hands_pipe
-            ]
-            if dry_run:
-                cmd.append("-DryRun")
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                   "-File", script,
+                   "-AppearanceCsvPath", self.appearance_csv_path,
+                   "-RootPath", ht_root,
+                   "-PlayerIdsPipe", ids_pipe,
+                   "-HandsPipe", hands_pipe]
+            if dry_run: cmd.append("-DryRun")
             try:
-                proc = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace"
-                )
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
+                                        text=True, encoding="utf-8", errors="replace")
                 for line in proc.stdout:
                     self.after(0, self._log, line.rstrip())
                 proc.wait()

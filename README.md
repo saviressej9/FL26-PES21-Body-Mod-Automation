@@ -1,138 +1,114 @@
 # FL26 Mod Automation
 
-A Windows desktop app for automatically assigning FC 26 body-model mods to players — grip socks, regular socks, pants, gloves, and handtape — with full control over percentages, random seeding, and manual player selection.
-
----
-
-## Features
-
-- **Percentage-based assignment** — assign any mod to X% of your player database, randomly but reproducibly via a seed
-- **Manual player selection** — search by name or ID and pin specific players to specific mods
-- **Per-section Dry Run / Apply** — test each mod category individually before committing
-- **Global Dry Run All / Run All** — process every enabled mod in one click
-- **Grip Sox brands** — balanced or random distribution across Adidas, Nike, TruSox, and more
-- **Gloves brands** — same balanced/random system, with Real Madrid and Bayern Munich excluded by default
-- **Handtape** — skin-color-aware assignment from your PESEditor appearance CSV
-- **Duplicate validation** — automatically checks for conflicts across mod groups after each run
-- **Settings persistence** — config saved to JSON; DB and appearance files backed up automatically
+A desktop tool for automating body model mod assignments in FC 26 (FIFA 26) using the [PRDX Body Model Add-On V2.5](https://www.pesmaster.com) via Sider.
 
 ---
 
 ## Requirements
 
-- Windows 10 or later
-- FC 26 with [Sider](https://github.com/juce/sider) + the **PRDX Body Model Add-On V2.5** mod pack installed
-- A player database file (`.txt` format: `ID - Name` per line, exported from your FL26 DB tool)
-- A PESEditor appearance CSV (required for Handtape only)
+- Windows 10 or 11
+- [Sider](https://github.com/juce/sider) with PRDX Body Model Add-On V2.5 installed
+- A PES/FC player database export (`.txt` format: `ID - Name`) or CSV
 
 ---
 
 ## Installation
 
-1. Download `FL26_ModAutomation_Setup.exe` from the [Releases](../../releases) page
-2. Run the installer and follow the wizard — no Python required
-3. Launch **FL26 Mod Automation** from your Start Menu or Desktop shortcut
+No installation required.
+
+1. Download `FL26_Mod_Automation_v[version].zip` from the [Releases](../../releases) page
+2. Extract the zip anywhere — your desktop, a USB drive, wherever you like
+3. Open the extracted folder and double-click **`FL26 Mod Automation.exe`**
+
+That's it. No Python, no setup wizards, nothing else to install.
 
 ---
 
-## Quick Start
+## First-Time Setup
 
-1. **Set Mod Root Folder** — point the app to your `PRDX_Body Model-Add On V2.5` folder
-2. **Load Player DB** — select your exported player `.txt` or `.csv` file
-3. **Configure each mod** — choose Percentage or Manual mode, set your values
-4. **Dry Run All** — review what *would* be assigned in the log
-5. **Run All** — confirm and apply
+1. **Mod Root Folder** — click Browse and select the root folder of your PRDX Body Model Add-On. This is the folder that contains subfolders like `Grip Sock-Long`, `Pants-Baggy`, etc.
+2. **Player DB File** — click Browse and select your player database file (`.txt` or `.csv`). This is used to build the list of player IDs that mods can be assigned to.
+
+Both settings are saved automatically and will be remembered next time you open the app.
 
 ---
 
-## Mod Categories
+## How It Works
 
-| Category | Mods | Notes |
+Each mod section lets you assign that mod to a percentage of players (randomly selected using a fixed seed for reproducibility) or to a manually chosen list of specific players.
+
+Mods that are mutually exclusive (e.g. you can't have two different grip sock styles on the same player) automatically exclude players already assigned elsewhere — no manual coordination needed.
+
+### Mod Groups
+
+| Group | Mods | Mutual Exclusion |
 |---|---|---|
-| Grip Socks | Dual Color, Long, Short, Brands | Players are only assigned to one grip sox type |
-| Socks | Holes, Middle High, Short Group | Players are only assigned to one sock type |
-| Pants | Baggy, Extra Baggy, Shorter | Players are only assigned to one pants type |
-| Gloves | Brands | Balanced or random across available brands |
-| Handtape | Left / Right hand | Requires PESEditor appearance CSV for skin color |
+| Grip Sox | Dual Color, Extra Long, Long, Short, Brands | Within group only |
+| Socks | Holes, Middle High, Short Group | Within group only |
+| Pants | Baggy, Extra Baggy, Shorter | Within group only |
+| Shirt | Baggy | Independent |
+| Gloves | Brands | Independent |
+| Sleeve Roll Up | Auto-detected variations | Independent |
+| Sleeve Inner | Auto-detected variations | Independent |
+| Wristtaping | Auto-detected variations | Independent |
+| Handtape | Manual only | Independent |
+
+Grouped sections (Sleeve Roll Up, Sleeve Inner, Wristtaping) auto-detect available variations by scanning your Mod Root Folder — no configuration needed.
+
+### Assignment Modes
+
+- **Percentage** — randomly assigns the mod to that percentage of all players in your DB, using the configured seed
+- **Manual** — assign to specific players only, searched by name or ID
+- **Per Variation** (brand/template mods) — set a separate percentage or manual list per variation (e.g. 10% Nike, 8% Adidas, specific players on TruSox)
+
+### Dry Run
+
+Every section has a **Dry Run** button that shows exactly what would be copied without touching any files. Always recommended before applying.
 
 ---
 
-## Configuration
+## Handtape
 
-Settings are saved to `FL26_ModAutomation.config.json` in the install folder. You can edit this directly if needed, but the UI handles everything.
+Handtape is manual-only and requires your PESEditor Appearance CSV to look up each player's skin colour. Select the CSV, add players by name or ID, choose left/right hand, then apply.
 
-Key fields:
+> ⚠️ Do not use handtape for players with in-game arm tattoos — it will overwrite them.
 
-```json
-{
-  "seed": 26,
-  "modRootPath": "C:/FL26/SiderAddons/...",
-  "mods": {
-    "gripSoxBrands": {
-      "enabled": true,
-      "percent": 40,
-      "mode": "Balanced",
-      "brands": ["Adidas", "Nike", "TruSox", "..."]
-    }
-  }
-}
-```
+---
 
-Changing `seed` will produce a different random distribution while remaining fully reproducible.
+## Updating
+
+To update to a new version, download the new zip from the Releases page and extract it to replace your existing folder. Your `FL26_ModAutomation.config.json` can be copied across to keep your settings.
 
 ---
 
 ## Building from Source
 
-If you want to run or modify the source directly:
+Requires Python 3.12+ and PyInstaller.
 
-```bash
-# Install dependencies
-pip install customtkinter pillow
-
-# Run the app
-python FL26_ModAutomation.py
 ```
-
-To build the standalone exe yourself:
-
-```bash
-pip install pyinstaller
+pip install customtkinter pillow pyinstaller
 pyinstaller FL26_ModAutomation.spec
 ```
 
-Then compile `FL26_ModAutomation_Setup.iss` with [Inno Setup 6](https://jrsoftware.org/isinfo.php) to produce the installer.
+The built exe will be at `dist\FL26 Mod Automation.exe`.
 
----
-
-## File Structure
+To package a release zip, copy the following into a folder named `FL26 Mod Automation`:
 
 ```
-FL26_ModAutomation/
-├── FL26_ModAutomation.py          # Main UI (customtkinter)
-├── FL26_ModAutomation.config.json # Saved settings
-├── PlayerIds.csv                  # Generated from your DB file
-├── Run-FL26-ModAutomation.ps1     # Master PowerShell runner
-├── Assign-GripSox-Single.ps1
-├── Assign-GripSox-Brands.ps1
-├── Assign-Socks.ps1
-├── Assign-Pants.ps1
-├── Assign-Gloves.ps1
-├── Assign-Handtape.ps1
-├── Validate-Assignments.ps1
-└── DB and Appearances/            # Auto-created backup folder
+FL26 Mod Automation.exe
+FL26_ModAutomation.config.json
+PlayerIds.csv
+Run-FL26-ModAutomation.ps1
+Assign-GripSox-Single.ps1
+Assign-GripSox-Brands.ps1
+Assign-Socks.ps1
+Assign-Pants.ps1
+Assign-Shirt.ps1
+Assign-Gloves.ps1
+Assign-Sleeve.ps1
+Assign-Wristtaping.ps1
+Assign-Handtape.ps1
+Validate-Assignments.ps1
 ```
 
----
-
-## Notes & Warnings
-
-- **Handtape** will overwrite arm texture data for a player. Do **not** use it on players with in-game arm tattoos.
-- All assignment scripts skip players that already have a folder on disk (no overwrite by default), so re-running is safe.
-- The app is Windows-only — PowerShell is required for the backend scripts.
-
----
-
-## License
-
-MIT — free to use, modify, and distribute.
+Then zip the folder and upload as a GitHub release asset.

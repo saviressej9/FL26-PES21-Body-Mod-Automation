@@ -8,9 +8,21 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        # Bundle the config and player CSV alongside the exe
+        # Config and player CSV
         ('FL26_ModAutomation.config.json', '.'),
         ('PlayerIds.csv', '.'),
+        # PowerShell scripts
+        ('Run-FL26-ModAutomation.ps1',   '.'),
+        ('Assign-GripSox-Single.ps1',    '.'),
+        ('Assign-GripSox-Brands.ps1',    '.'),
+        ('Assign-Socks.ps1',             '.'),
+        ('Assign-Pants.ps1',             '.'),
+        ('Assign-Shirt.ps1',             '.'),
+        ('Assign-Gloves.ps1',            '.'),
+        ('Assign-Sleeve.ps1',            '.'),
+        ('Assign-Wristtaping.ps1',       '.'),
+        ('Assign-Handtape.ps1',          '.'),
+        ('Validate-Assignments.ps1',     '.'),
     ],
     hiddenimports=[
         'customtkinter',
@@ -35,17 +47,17 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='FL26_ModAutomation',
+    name='FL26 Mod Automation',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,          # no console window
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='icon.ico',      # uncomment and add icon.ico to use a custom icon
+    # icon='icon.ico',    # uncomment and add icon.ico to use a custom icon
 )
