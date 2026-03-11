@@ -41,14 +41,16 @@
         "Storelli",
         "Tapedesign",
         "TruSox"
-      ]
+      ],
+      "perVariationMode": false
     },
     "sockHoles": {
       "enabled": true,
       "folderName": "Sock-Holes",
       "logPrefix": "Socks_Holes",
       "percent": 0,
-      "manualPlayerIds": []
+      "manualPlayerIds": [],
+      "perVariationMode": false
     },
     "sockMiddleHigh": {
       "enabled": true,
@@ -62,9 +64,8 @@
       "folderName": "Sock-Short",
       "logPrefix": "Socks_ShortGroup",
       "percent": 0,
-      "manualPlayerIds": [
-        "140332"
-      ]
+      "manualPlayerIds": [],
+      "perVariationMode": false
     },
     "pantsBaggy": {
       "enabled": true,
@@ -85,9 +86,7 @@
       "folderName": "Pants-Shorter",
       "logPrefix": "Pants_Shorter",
       "percent": 0,
-      "manualPlayerIds": [
-        "140332"
-      ]
+      "manualPlayerIds": []
     },
     "glovesBrands": {
       "enabled": true,
@@ -99,12 +98,46 @@
       "excludeBrands": [
         "Real Madrid",
         "Bayern Munich"
-      ]
+      ],
+      "perVariationMode": false
     },
     "handtape": {
       "enabled": true,
       "folderName": "xTexture_Hand Tape",
       "logPrefix": "Handtape"
+    },
+    "shirtBaggy": {
+      "enabled": true,
+      "percent": 0,
+      "manualPlayerIds": []
+    }
+  },
+  "dbPath": "C:/Users/Administrator/Downloads/FL26_Automation - GitLab/DB and Appearances/FL2614_players.txt",
+  "appearanceCsvPath": "C:/Users/Administrator/Downloads/FL26_Automation - GitLab/DB and Appearances/FL26_v1-4_Appearances.csv",
+  "grouped": {
+    "gripSoxLength": {
+      "enabled": true,
+      "percent": 0,
+      "manualPlayerIds": [],
+      "perVariationMode": false
+    },
+    "sleeveRollUp": {
+      "enabled": true,
+      "percent": 0,
+      "manualPlayerIds": [],
+      "perVariationMode": false
+    },
+    "sleeveInner": {
+      "enabled": true,
+      "percent": 0,
+      "manualPlayerIds": [],
+      "perVariationMode": false
+    },
+    "wristtaping": {
+      "enabled": true,
+      "percent": 0,
+      "manualPlayerIds": [],
+      "perVariationMode": false
     }
   }
 }
